@@ -1,0 +1,115 @@
+---
+title: "U.S. Election Project"
+author: "Arthur, Moritz, San Hong"
+date: "2024-09-10"
+output: html_document
+---
+
+# Tasks To-Do
+
+-    Nice graph about voter turn out rate over time (?)
+
+-   
+
+```{r setup, include = TRUE}
+
+### Change directory here. Keep file structure same as sharepoint structure.
+knitr::opts_knit$set(root.dir = "C:/Users/arthu/Documents/_Arthur/!LKYSPP MIA/3-3 R Module/_Project")
+
+library(here)
+library(tidyverse)
+library(plm)
+
+```
+
+# Preparing Data for Merge
+```{r df_turnout}
+
+### Clean workspace
+rm(list=ls())
+
+### Import voter turnout data
+### https://election.lab.ufl.edu/dataset/1980-2022-general-election-turnout-rates/ 
+df_turnout <- read_csv("02. Inputs/Turnout_1980_2022_v1.0.csv")
+
+### Preparing dataframe for merging
+df1 <- df_turnout %>% 
+  # Changing percent string to numeric
+  mutate(across(c(NONCITIZEN_PCT, VEP_TURNOUT_RATE, VAP_TURNOUT_RATE), ~as.numeric(sub("%", "", .)))) %>%
+  # Renaming column names to lowercase (for easier merge)
+  rename_all(tolower)
+
+```
+
+```{r df_candivote}
+
+### Import "votes for each presidential candidate"
+### https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/VOQCHQ
+df_candivote <- read_csv("02. Inputs/countypres_2000-2020.csv")
+
+### Preparing dataframe for merging
+df2 <- df_candivote %>% 
+  # Converting county-level data to state level data
+  group_by(year, state, office, party) %>% 
+  summarize(state_candidatevotes = sum(candidatevotes),
+            state_totalvotes = sum(totalvotes),
+            .groups = "drop") %>%
+  # Changing state names from all caps to sentence caps
+  mutate(state = str_to_sentence(state)) %>% 
+  # Redundancy check, narrowing to only U.S. Presidential elections
+  filter(office == "US PRESIDENT") %>% 
+  select(-office) %>% 
+  # Pivot to wide data format
+  mutate(party = paste0(tolower(party),"_vote")) %>% 
+  pivot_wider(names_from = party,
+              values_from = state_candidatevotes) %>% 
+  # Adding new columns that convert number of votes, to percentage of votes 
+  mutate(across(4:ncol(.), ~ . / state_totalvotes,.names = "{.col}_perc"))
+
+```
+
+```{r df_crime}
+
+### Import state crime rate
+### https://corgis-edu.github.io/corgis/csv/state_crime/
+df_crime <- read_csv("02. Inputs/state_crime.csv")
+
+### Preparing dataframe for merging
+df3 <- df_crime %>% 
+  # Renaming column names to lowercase (for easier merge)
+  rename_all(tolower) %>% 
+  # Renaming column names to "crime" for easier indexing
+  rename_with(~ gsub("data","crime",.), contains("data"))
+
+```
+
+# Merging Data
+```{r merge}
+
+### Merge dataframes
+df_merge <- left_join(df1, df2, by = join_by("year" == "year", "state" == "state")) %>% 
+  left_join(df3, by = join_by("year" == "year", "state" == "state")) %>% 
+  relocate(state_abv, .after = state)
+
+write.csv(df_merge, file = "04. Outputs/2024-09-11_electiondataset_arthur.csv")
+
+```
+
+# Analysis Section
+```{r quick-regression}
+
+p.df <- df_merge %>% 
+  pdata.frame(index = c("state", "year"))
+
+plm(state_totalvotes~vep+noncitizen_pct,
+    data = p.df,
+    effect = "twoway", model = "within") %>% 
+  summary()
+
+```
+
+# Visualization Section
+```{r viz}
+
+```
+
