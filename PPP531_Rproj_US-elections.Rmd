@@ -114,6 +114,36 @@ df3 <- df_crime %>%
 
 ```
 
+```{r}
+
+### Import redistricting data
+### https://redistricting.lls.edu/national-overview/?colorby=Plan%20Status&level=Congress&cycle=2020
+df_redist <- read_csv("02. Inputs/StatesAndCyclesData_production-20240301a.csv")
+
+df4_1 <- df_redist %>% 
+  # Renaming column names to lowercase (for easier merge)
+  rename_all(tolower) %>% 
+  # Extracting the year the redistricting plan was passed
+  mutate(pass_year = substr(passed, start = 1, stop = 4)) %>% 
+  # Dropping entries without such information
+  drop_na(pass_year) %>% 
+  ### ADJUST!!!
+  # Filters that need to be adjusted
+  # filter(level == "State Lower") %>% 
+  # filter(pass_year <= 2020) %>% 
+  ###
+  select(state, pass_year, level, `party control`, `drawn by`)
+
+df4_2 <- df4_1 %>% 
+  group_by(state) %>%
+  summarize(n = n(),
+            min_year = min(pass_year),
+            max_year = max(pass_year)) %>%
+  arrange(desc(n))
+
+```
+
+
 # Merging Data
 ```{r merge}
 
