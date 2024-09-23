@@ -186,8 +186,13 @@ df5 <- df_unemp %>%
   ungroup() %>% 
   # Split the county name into a separate column
   group_by(county_code) %>% 
-  mutate(county_name = unlist(strsplit(countyName_StateAbbreviation, ", "))[1])
+  mutate(county_name = str_remove(unlist(strsplit(countyName_StateAbbreviation, ", "))[1], " County")) %>% 
+  ungroup()
 
+### 
+df5_2 <- df5 %>% 
+  select(year, state_abv, county_name, laborForce, employed, unemployed, unemploymentRate) %>% 
+  mutate(year = as.numeric(year))
 
 ```
 
@@ -240,7 +245,8 @@ df6 <- df_poll %>%
   # drop all unneeded columns
   select(election_date, county_name, n) %>% 
   # keep unique rows
-  distinct()
+  distinct() %>% 
+  mutate(election_year = as.numeric(substr(election_date, start = 1, stop = 4)))
 
 ```
 
@@ -249,11 +255,15 @@ df6 <- df_poll %>%
 
 ### Merge dataframes
 # Df2 is primary, because it has county level and state level
-df_merge <- df2 %>% 
+df_merge1 <- df2 %>% 
   left_join(df1 %>%  select(-state), by = join_by("year" == "year", "state_abv" == "state_abv")) %>%  
   left_join(df3 %>% select(-state), by = join_by("year" == "year", "state_abv" == "state_abv")) %>% 
   mutate(idkey = paste0(state_abv,"_", county_name)) %>% 
   relocate(idkey, .before = 1)
+
+df_merge2 <- df_merge1 %>% 
+  left_join(df5_2, by = join_by("year" == "year", "state_abv" == "state_abv", "county_name" == "county_name")) %>% 
+  left_join(df6, by = join_by("year" == "election_year", "county_name" == "county_name"))
 
 ### Save dataset
 write.csv(df_merge, file = paste0("04. Outputs/", today(), "_electiondataset.csv"))
