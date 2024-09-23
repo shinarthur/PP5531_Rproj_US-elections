@@ -17,6 +17,8 @@ library(here)
 library(tidyverse)
 library(plm)
 library(stargazer)
+library(readxl)
+library(stringi)
 
 ### Change directory here. Keep file structure same as sharepoint structure.
 knitr::opts_knit$set(root.dir = here::here())
@@ -143,6 +145,51 @@ df4_2 <- df4_1 %>%
 
 ```
 
+```{r df_unemployment, results='hide'}
+### Import county unemployment rate
+### https://www.bls.gov/lau/tables.htm#cntyaa
+
+### Row Binding all Annual County Unemployment Data from 1997 to 2003
+
+# Prepare Files' Paths
+unemp_county_files <- list.files(path = "02. Inputs/county_unemployment", full.names = TRUE, recursive = TRUE)
+
+# Prepare empty data frame to catch
+df_unemp <- data.frame(matrix(ncol = 8, nrow = 0))
+
+# Loop each file into binding
+for (file in unemp_county_files) {
+  # Read xslx file
+  file_data <- read_xlsx(file)
+  # Remove headers and unnecessary columns to match to empty data frame
+  file_slice <- file_data[-c(1:5),-c(1,6)] %>% 
+    # Remove NA (Note: there are data entry of "N.A." in character)
+    na.omit()
+  # Rename columns
+  names(file_slice) <- c("state_code",
+                         "county_code",
+                         "countyName_StateAbbreviation",
+                         "year",
+                         "laborForce",
+                         "employed",
+                         "unemployed",
+                         "unemploymentRate")
+  # Rbind
+  df_unemp <- rbind(df_unemp, file_slice)
+}
+
+### Preparing data frame for merging
+df4 <- df_unemp %>% 
+  # Split the state abbreviation into a separate column and make exception of District of Columbia
+  group_by(state_code) %>% 
+  mutate(state_abv = ifelse(grepl(",\\s([A-Z]{2})", countyName_StateAbbreviation), unlist(strsplit(countyName_StateAbbreviation, ", "))[2], "DC")) %>% 
+  ungroup() %>% 
+  # Split the county name into a separate column
+  group_by(county_code) %>% 
+  mutate(county_name = unlist(strsplit(countyName_StateAbbreviation, ", "))[1])
+
+
+```
 
 # Merging Data
 ```{r merge}
