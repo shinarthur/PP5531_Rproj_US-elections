@@ -145,13 +145,13 @@ df4_2 <- df4_1 %>%
 
 ```
 
-```{r df_unemployment, results='hide'}
-### Import county unemployment rate
+```{r df_unemp, results='hide'}
+### Source county unemployment rate from the following link:
 ### https://www.bls.gov/lau/tables.htm#cntyaa
 
-### Row Binding all Annual County Unemployment Data from 1997 to 2003
+### Row binding all annual county unemployment data from 1997 to 2003
 
-# Prepare Files' Paths
+# Collate files' paths
 unemp_county_files <- list.files(path = "02. Inputs/county_unemployment", full.names = TRUE, recursive = TRUE)
 
 # Prepare empty data frame to catch
@@ -179,7 +179,7 @@ for (file in unemp_county_files) {
 }
 
 ### Preparing data frame for merging
-df4 <- df_unemp %>% 
+df5 <- df_unemp %>% 
   # Split the state abbreviation into a separate column and make exception of District of Columbia
   group_by(state_code) %>% 
   mutate(state_abv = ifelse(grepl(",\\s([A-Z]{2})", countyName_StateAbbreviation), unlist(strsplit(countyName_StateAbbreviation, ", "))[2], "DC")) %>% 
@@ -188,6 +188,59 @@ df4 <- df_unemp %>%
   group_by(county_code) %>% 
   mutate(county_name = unlist(strsplit(countyName_StateAbbreviation, ", "))[1])
 
+
+```
+
+```{r df_poll}
+### Source Polling Station Data from the following linK:
+### https://github.com/PublicI/us-polling-places/tree/update-2020
+
+### Row bind all the county-level polling station data
+
+# Collate all files path
+poll_files_all <- list.files(path = "02. Inputs/us-polling-places/data", full.names = TRUE, recursive = TRUE)
+
+# Filter for only polling station data
+poll_files <- c()
+for (file in poll_files_all){
+  if(grepl("/output/", file)){
+    poll_files <- append(poll_files, file)
+  }
+}
+
+df_poll <- data.frame(matrix(ncol = 15, nrow = 0))
+
+# Loop each file into binding
+for (file in poll_files) {
+  # Read csv file
+  file_data <- read.csv(file)
+  # Safety check for same number of columns before binding
+  if (ncol(file_data) == 15){
+    # Rbind
+    df_poll <- rbind(df_poll, file_data)
+  }
+  else{
+    print(file)
+    print(ncol(file_data))
+  }
+}
+
+### Prepare data frame for merge
+df6 <- df_poll %>% 
+  # filter out jurisdiction with no names (they are likely precincts)
+  #filter(jurisdiction != "") %>% 
+  # replace county name with jurisdiction name when jurisdiction type is not county and county name is NA
+  mutate(county_name = if_else(jurisdiction_type != "county" & is.na(county_name), jurisdiction, county_name)) %>%
+  # Harmonise cases
+  mutate(county_name = str_to_sentence(county_name)) %>% 
+  # Tally by election date for each county
+  group_by(election_date, county_name) %>% 
+  add_count() %>% 
+  ungroup() %>% 
+  # drop all unneeded columns
+  select(election_date, county_name, n) %>% 
+  # keep unique rows
+  distinct()
 
 ```
 
