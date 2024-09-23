@@ -22,12 +22,10 @@ library(tictoc)
 
 # Note: Please set your own working directory before running the code
 
-# setwd("C:/Users/Lew San Hong/Desktop/NUS/ACI/ASEAN DTA Corpus") # San Hong's Directory
 setwd("C:/Users/arthu/Documents/_Arthur/[RA] ACI/04. R Code - Corpus")
 
 xml_list <- list.files(path="Agreement Mod XML", full.names = TRUE, recursive = TRUE )
 meta_data <- read.csv("meta_byNewDocID_Jan-09-2024.csv")
-# meta_data <- read.csv("Metadata for Agreements/Metadata by New DocID/meta_byNewDocID.csv") # San Hong's Directory
 
 # San Hong Version
 tic()
