@@ -145,7 +145,7 @@ df4_2 <- df4_1 %>%
 
 ```
 
-```{r df_unemp, results='hide'}
+```{r df_unemp, results='hide', message=FALSE}
 ### Source county unemployment rate from the following link:
 ### https://www.bls.gov/lau/tables.htm#cntyaa
 
@@ -224,6 +224,9 @@ df_poll <- data.frame(matrix(ncol = 15, nrow = 0))
 for (file in poll_files) {
   # Read csv file
   file_data <- read.csv(file)
+  # Append state name from file path
+  # state <- unlist(strsplit(file, "/"))[4]
+  # file_data$state <- str_to_sentence(state)
   # Safety check for same number of columns before binding
   if (ncol(file_data) == 15){
     # Rbind
@@ -237,16 +240,16 @@ for (file in poll_files) {
 
 ### Prepare data frame for merge
 df6 <- df_poll %>% 
-  # filter out jurisdiction with no names (they are likely precincts)
-  #filter(jurisdiction != "") %>% 
-  # replace county name with jurisdiction name when jurisdiction type is not county and county name is NA
-  mutate(county_name = if_else(jurisdiction_type != "county" & is.na(county_name), jurisdiction, county_name)) %>%
+  # replace county name with "non-county" value when county name is NA or empty
+  mutate(county_name = if_else((county_name == "" | is.na(county_name)), "non-county", county_name)) %>%
   # Harmonise cases
   mutate(county_name = str_to_sentence(county_name)) %>% 
   # Extract election year & harmonize to numeric
   mutate(election_year = as.numeric(substr(election_date, start = 1, stop = 4))) %>% 
+  # filter out jurisdiction with no names (they are likely precincts)
+  filter(jurisdiction != "") %>%
   # Tally by election year for each county
-  group_by(election_year, county_name) %>% 
+  group_by(election_year, county_name, state) %>% 
   summarize(polling_station = n())
 
 ```
@@ -264,8 +267,7 @@ df_merge1 <- df2 %>%
 
 df_merge2 <- df_merge1 %>% 
   left_join(df5, by = join_by("year" == "year", "state_abv" == "state_abv", "county_name" == "county_name")) %>%
-  left_join(df6, by = join_by("year" == "election_year", "county_name" == "county_name"))
-
+  left_join(df6, by = join_by("year" == "election_year", "county_name" == "county_name", "state_abv" == "state" )) 
 
 ### Save dataset
 write.csv(df_merge2, file = paste0("04. Outputs/", today(), "_electiondataset.csv"))
