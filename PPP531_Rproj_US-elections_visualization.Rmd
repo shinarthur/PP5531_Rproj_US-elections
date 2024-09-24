@@ -1,0 +1,42 @@
+---
+title: "U.S. Election Project"
+author: "Arthur, Moritz, San Hong"
+date: "2024-09-10"
+output: html_document
+---
+
+# Tasks To-Do
+
+-    Nice graph about voter turn out rate over time (?)
+
+-   
+
+# Setup
+```{r setup}
+
+library(here)
+library(tidyverse)
+
+### Change directory here. 
+### As long as file structure is same as github structure, directory does not need to be changed.
+knitr::opts_knit$set(root.dir = here::here())
+
+```
+
+
+```{r import data}
+rm(list=ls())
+
+df <- read_rds("04. Outputs/2024-09-24_electiondataset.rds")
+
+legend <- df %>% 
+  colnames() %>% 
+  as.data.frame()
+  
+```
+
+# Visualization Section
+```{r viz}
+
+```
+

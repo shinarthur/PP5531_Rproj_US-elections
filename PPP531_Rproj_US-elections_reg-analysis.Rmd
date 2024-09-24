@@ -1,0 +1,110 @@
+---
+title: "U.S. Election Project"
+author: "Arthur, Moritz, San Hong"
+date: "2024-09-10"
+output: html_document
+---
+
+# Tasks To-Do
+
+-    Nice graph about voter turn out rate over time (?)
+
+-   
+
+# Setup
+```{r setup}
+
+library(here)
+library(tidyverse)
+library(plm)
+library(stargazer)
+library(readxl)
+
+### Change directory here. 
+### As long as file structure is same as github structure, directory does not need to be changed.
+knitr::opts_knit$set(root.dir = here::here())
+
+```
+
+
+```{r import data}
+rm(list=ls())
+
+df <- read_rds("04. Outputs/2024-09-24_electiondataset.rds")
+
+legend <- df %>% 
+  colnames() %>% 
+  as.data.frame()
+  
+```
+
+# Functions
+```{r custom reg function}
+### Creating a function to run multiple regressions simultaneously
+f.reg.multi <- function(dv.sav = dv, 
+                        iv.sav = iv, 
+                        dataframe.sav = p.df, 
+                        title.sav = "testingasdf", 
+                        effect.sav = "time",
+                        type.sav = "within", 
+                        dv_label.sav = dv_label, 
+                        cov_label.sav = NULL) {
+  templist <- list()
+  
+  for (i in 1:length(dv.sav)){
+  
+    val <- dv.sav[[i]]
+    
+    formula_str <- paste0(val, "~", iv.sav)
+    
+    templist[[i]] <- plm(as.formula(paste(formula_str, collapse = " ")),
+                        data = dataframe.sav,
+                        effect = effect.sav, 
+                        model = type.sav)
+  }
+    
+  stargazer(templist[[1]],
+            templist[[2]],
+            templist[[3]],
+          type = ifelse(knitr::is_latex_output(),"latex", "text"),
+          report = "vc*sp",
+          dep.var.labels = paste0(title.sav),
+          dep.var.labels.include = T,
+          column.sep.width = "0pt",
+          float = FALSE,
+          header = FALSE,
+          no.space = TRUE,
+          font.size = "small",
+          # specific to this project
+          column.labels = dv_label.sav,
+          covariate.labels = cov_label.sav
+          ) %>%
+    return()
+  
+}
+
+```
+
+
+# Analysis Section
+```{r quick-regression}
+
+### Creating panel data dataframe
+p.df <- df %>% 
+  pdata.frame(index = c("idkey", "year"))
+
+# Using time fixed effects only, as the unbalanced panel data makes it problematic to run county fixed effect in addition
+dv <- c("log(county_totalvotes)", "log(democrat_county_vote)", "log(republican_county_vote)")
+iv <- "redistrict_count + log(polling_station) + log(unemploymentRate) + log(vep_turnout_rate)"
+dv_label <- c("TOTAL-CountyVotes", "D-CountyVotes", "REP-CountyVotes", "OTH-CountyVotes")
+# cov_labl <- c("Redistricting count", "No. of polling stations", "Unemployment rate", "VEP turnout rate")
+
+f.reg.multi()
+
+```
+
+# Visualization Section
+```{r viz}
+
+```
+
