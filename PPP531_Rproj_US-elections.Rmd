@@ -131,7 +131,7 @@ df4_1 <- df_redist %>%
   drop_na(pass_year) %>% 
   ### ADJUST!!!
   # Filters that need to be adjusted
-  # filter(level == "State Lower") %>% 
+  filter(level == "State Lower") %>%
   # filter(pass_year <= 2020) %>% 
   ###
   select(state, pass_year, level, `party control`, `drawn by`)
@@ -178,16 +178,26 @@ for (file in unemp_county_files) {
   df_unemp <- rbind(df_unemp, file_slice)
 }
 
-### Preparing data frame for merging
-df5 <- df_unemp %>% 
-  # Split the state abbreviation into a separate column and make exception of District of Columbia
-  group_by(state_code) %>% 
-  mutate(state_abv = ifelse(grepl(",\\s([A-Z]{2})", countyName_StateAbbreviation), unlist(strsplit(countyName_StateAbbreviation, ", "))[2], "DC")) %>% 
-  ungroup() %>% 
-  # Split the county name into a separate column
-  group_by(county_code) %>% 
-  mutate(county_name = unlist(strsplit(countyName_StateAbbreviation, ", "))[1])
+countyexpressions <- c(" Borough/municipality" = "",  " Borough/city" = "", " County/city" = "", " County" = "", " Census Area"  = "", " Borough" = "", "/" = "")
 
+### [Arthur version] Preparing data frame for merging
+df5 <- df_unemp %>% 
+  # Extracting state abbreviations
+  mutate(state_abv = case_when(
+    # District of Columbia manually labelled as "DC"
+    countyName_StateAbbreviation == "District of Columbia" ~ "DC",
+    # Extracting the abbreviation from the last two letters of the countyName_StateAbbreviation string
+    TRUE ~ substr(countyName_StateAbbreviation, start = nchar(countyName_StateAbbreviation)-1, stop = nchar(countyName_StateAbbreviation)))) %>% 
+  # Extracting county name
+  mutate(county_name.temp1 = str_remove_all(countyName_StateAbbreviation, paste0(", ", state_abv)),
+         # Harmonizing county name by removing expressions in `countryexpressions`
+         county_name.temp2 = str_remove_all(county_name.temp1, countyexpressions),
+         # Harmonizing county names by changing to sentence case
+         county_name = str_to_sentence(county_name.temp2)) %>%
+  # Selecting relevant columns only
+  select(year, state_abv, county_name, laborForce, employed, unemployed, unemploymentRate) %>% 
+  # Changing structure of year for merging
+  mutate(year = as.numeric(year))
 
 ```
 
@@ -233,14 +243,11 @@ df6 <- df_poll %>%
   mutate(county_name = if_else(jurisdiction_type != "county" & is.na(county_name), jurisdiction, county_name)) %>%
   # Harmonise cases
   mutate(county_name = str_to_sentence(county_name)) %>% 
-  # Tally by election date for each county
-  group_by(election_date, county_name) %>% 
-  add_count() %>% 
-  ungroup() %>% 
-  # drop all unneeded columns
-  select(election_date, county_name, n) %>% 
-  # keep unique rows
-  distinct()
+  # Extract election year & harmonize to numeric
+  mutate(election_year = as.numeric(substr(election_date, start = 1, stop = 4))) %>% 
+  # Tally by election year for each county
+  group_by(election_year, county_name) %>% 
+  summarize(polling_station = n())
 
 ```
 
@@ -249,14 +256,19 @@ df6 <- df_poll %>%
 
 ### Merge dataframes
 # Df2 is primary, because it has county level and state level
-df_merge <- df2 %>% 
+df_merge1 <- df2 %>% 
   left_join(df1 %>%  select(-state), by = join_by("year" == "year", "state_abv" == "state_abv")) %>%  
   left_join(df3 %>% select(-state), by = join_by("year" == "year", "state_abv" == "state_abv")) %>% 
   mutate(idkey = paste0(state_abv,"_", county_name)) %>% 
   relocate(idkey, .before = 1)
 
+df_merge2 <- df_merge1 %>% 
+  left_join(df5, by = join_by("year" == "year", "state_abv" == "state_abv", "county_name" == "county_name")) %>%
+  left_join(df6, by = join_by("year" == "election_year", "county_name" == "county_name"))
+
+
 ### Save dataset
-write.csv(df_merge, file = paste0("04. Outputs/", today(), "_electiondataset.csv"))
+write.csv(df_merge2, file = paste0("04. Outputs/", today(), "_electiondataset.csv"))
 
 ```
 
