@@ -16,6 +16,8 @@ output: html_document
 
 library(here)
 library(tidyverse)
+library(ggplot2)
+library(readr)
 
 ### Change directory here. 
 ### As long as file structure is same as github structure, directory does not need to be changed.
@@ -28,6 +30,7 @@ knitr::opts_knit$set(root.dir = here::here())
 rm(list=ls())
 
 df <- read_rds("04. Outputs/2024-09-24_electiondataset.rds")
+### alternative: data <- read_csv("2024-09-24_electiondataset.csv")
 
 legend <- df %>% 
   colnames() %>% 
@@ -40,3 +43,19 @@ legend <- df %>%
 
 ```
 
+### Scatter plot of vep_turnout_rate and redistricting counts
+ggplot(data, aes(x = redistrict_count, y = vep_turnout_rate)) +
+  geom_point(alpha = 0.6, color = "blue") +
+  labs(title = "VEP Turnout Rate vs. Redistrict Count", 
+       x = "Redistrict Count", 
+       y = "VEP Turnout Rate") +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  theme_minimal()
+
+### Boxplot to visualize VEP turnout rate grouped by the number of times a county was redistricted
+ggplot(data, aes(x = as.factor(redistrict_count), y = vep_turnout_rate)) +
+  geom_boxplot(fill = "lightgreen") +
+  labs(title = "VEP Turnout Rate by Redistrict Count", 
+       x = "Redistrict Count", 
+       y = "VEP Turnout Rate") +
+  theme_minimal()
