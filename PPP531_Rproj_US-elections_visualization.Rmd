@@ -44,6 +44,8 @@ legend <- df %>%
 
 ```
 
+# Replace NA values in redistrict_count with 0 and clean
+X2024_09_24_electiondataset$redistrict_count[is.na(X2024_09_24_electiondataset$redistrict_count)] <- 0
 cleaned_data <- X2024_09_24_electiondataset %>%
   filter(!is.na(redistrict_count) & !is.na(vep_turnout_rate))
 
