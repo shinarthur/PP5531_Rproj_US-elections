@@ -32,7 +32,7 @@ df1 <- df_turnout %>%
   # Changing percent string to numeric
   mutate(across(c(NONCITIZEN_PCT, VEP_TURNOUT_RATE, VAP_TURNOUT_RATE), ~as.numeric(sub("%", "", .)))) %>%
   # Removing columns unrelated to voter turnout rate
-  select(1:3, VEP_TURNOUT_RATE, VAP_TURNOUT_RATE) %>% 
+  select(1:3, VEP_TURNOUT_RATE, VAP_TURNOUT_RATE, VEP, VAP) %>% 
   # Renaming column names to lowercase (for easier merge)
   rename_all(tolower)
 
@@ -137,7 +137,16 @@ df4_1 <- df_redist %>%
 
 df4_2 <- df4_1 %>% 
   group_by(elect_year, state) %>%
-  summarize(n = n()) %>%
+  summarize(n = n(),
+            rep_ctrl = sum(`party control` == "Republican"),
+            dem_ctrl = sum(`party control` == "Democratic"),
+            split_ctrl = sum(`party control` == "Split")) %>%
+  mutate(state_party_control = case_when(!rep_ctrl + dem_ctrl + split_ctrl == n ~ "Uncertain",
+                           rep_ctrl / n > 0.5 ~ "Republican",
+                           dem_ctrl / n > 0.5 ~ "Democratic",
+                           split_ctrl / n > 0.5 ~ "Split",
+                           TRUE ~ "Split")) %>% 
+  select(-rep_ctrl, -dem_ctrl, -split_ctrl) %>% 
   arrange(desc(n)) %>% 
   rename(redistrict_count = n)
 
@@ -265,12 +274,13 @@ df_merge1 <- df2 %>%
   left_join(df1 %>%  select(-state), by = join_by("year" == "year", "state_abv" == "state_abv")) %>%  
   left_join(df3 %>% select(-state), by = join_by("year" == "year", "state_abv" == "state_abv")) %>% 
   left_join(df4_2, by = join_by("year" == "elect_year", "state_abv" == "state")) %>% 
-  mutate(idkey = paste0(state_abv,"_", county_name)) %>% 
+  mutate(idkey = paste0(state_abv,"_", county_name)) %>%
   relocate(idkey, .before = 1)
 
 df_merge2 <- df_merge1 %>% 
   left_join(df5, by = join_by("year" == "year", "state_abv" == "state_abv", "county_name" == "county_name")) %>%
-  left_join(df6, by = join_by("year" == "election_year", "county_name" == "county_name", "state_abv" == "state" )) 
+  left_join(df6, by = join_by("year" == "election_year", "county_name" == "county_name", "state_abv" == "state" )) %>% 
+  mutate(across(c("state_abv", "county_name", "state_party_control"), ~as.factor(.)))
 
 df_final <- df_merge2
 
@@ -286,7 +296,7 @@ saveRDS(df_final, file = paste0("04. Outputs/", today(), "_electiondataset.rds")
 # Additional Data Edits
 ```{r additional edits}
 
-df <- read_rds("04. Outputs/2024-09-24_electiondataset.rds")
+df <- read_rds("04. Outputs/2024-09-26_electiondataset.rds")
 
 ```
 
