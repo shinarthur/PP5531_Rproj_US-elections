@@ -48,7 +48,9 @@ f.reg.multi <- function(dv.sav = dv,
                         effect.sav = "time",
                         type.sav = "within", 
                         dv_label.sav = NULL, 
-                        cov_label.sav = NULL) {
+                        cov_label.sav = NULL,
+                        star.type = ifelse(knitr::is_latex_output(),"latex", "text"),
+                        star.out = NULL) {
   templist <- list()
   
   for (i in 1:length(dv.sav)){
@@ -64,16 +66,16 @@ f.reg.multi <- function(dv.sav = dv,
   }
     
   stargazer(templist,
-          type = ifelse(knitr::is_latex_output(),"latex", "text"),
+          type = star.type,
+          out = star.out,
           report = "vc*sp",
           dep.var.labels = paste0(title.sav),
           dep.var.labels.include = T,
-          column.sep.width = "0pt",
+          # column.sep.width = "0pt",
           float = FALSE,
           header = FALSE,
-          no.space = TRUE,
+          # no.space = TRUE,
           font.size = "small",
-          # specific to this project
           column.labels = dv_label.sav,
           covariate.labels = cov_label.sav
           ) %>%
@@ -100,7 +102,7 @@ f.reg.single <- function(dv.sav = dv,
                         model = type.sav)
     
   stargazer(model,
-          type = ifelse(knitr::is_latex_output(),"latex", "text"),
+          type = starout,
           report = "vc*sp",
           dep.var.labels = paste0(title.sav),
           dep.var.labels.include = T,
@@ -121,6 +123,8 @@ f.reg.single <- function(dv.sav = dv,
 
 
 # Analysis Section
+
+* Focus on regression 2 for now
 
 ```{r regression 1}
 
@@ -145,7 +149,7 @@ f.reg.multi(dv.sav = dv, iv.sav = iv,
 ```
 
 
-```{r regression 2}
+```{r regression 2, results = "asis"}
 
 ### Creating panel data dataframe
 p.df <- df %>% 
@@ -158,14 +162,17 @@ p.df <- df %>%
 # Using time fixed effects only, as the unbalanced panel data makes it problematic to run county fixed effect in addition
 # dv <- c("log(county_totalvotes)", "log(democrat_county_vote)", "log(republican_county_vote)")
 dv <- c("log(democrat_county_vote_perc)", "log(republican_county_vote_perc)")
-iv <- "redistrict_count + log(poll_perc) + log(vep_turnout_rate) + state_party_control"
+iv <- "redistrict_count + log(poll_perc) + log(vep_turnout_rate) + log(unemploymentRate) + state_party_control"
 # dv_label <- c("TOTAL-CountyVotes", "D-CountyVotes", "REP-CountyVotes", "OTH-CountyVotes")
-dv_label <- c("DEM % of County Votes (Log)", "REP % of County Votes (Log)")
-cov_label <- c("Redistricting attempts per election cycle", "Polling station per pop (Log)", "VEP turnout rate  (Log)", "DEM State Legislature", "REP State Legislature")
+dv_label <- c("DEM % of county votes (log)", "REP % of county votes (log)")
+cov_label <- c("Redistricting attempts per election cycle [state-level]", "Polling station to laborforce ratio (log) [county-level]", "Voting-Eligible-Population turnout rate (log) [state-level]", "Unemployment rate  (log) [county-level]", "State legislature control - DEM", "State legislature control - REP")
 
 f.reg.multi(dv.sav = dv, iv.sav = iv, 
             dv_label.sav = dv_label, cov_label.sav = cov_label, 
-            title = "Effect of Redistricting on Party Choice in Presidential Elections")
+            title.sav = "Effect of Redistricting on Party Choice in Presidential Elections"
+            # , star.type = "html",
+            # star.out = '05. Visualizations/regression-tbl.html'
+            )
 
 ```
 
