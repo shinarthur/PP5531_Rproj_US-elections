@@ -5,12 +5,6 @@ date: "2024-09-10"
 output: html_document
 ---
 
-# Tasks To-Do
-
--    Nice graph about voter turn out rate over time (?)
-
--   
-
 # Setup
 ```{r setup}
 
@@ -69,6 +63,7 @@ f.reg.multi <- function(dv.sav = dv,
           type = star.type,
           out = star.out,
           report = "vc*sp",
+          title = "asdf",
           dep.var.labels = paste0(title.sav),
           dep.var.labels.include = T,
           # column.sep.width = "0pt",
@@ -76,42 +71,6 @@ f.reg.multi <- function(dv.sav = dv,
           header = FALSE,
           # no.space = TRUE,
           font.size = "small",
-          column.labels = dv_label.sav,
-          covariate.labels = cov_label.sav
-          ) %>%
-    return()
-  
-}
-
-### Creating a function to run multiple regressions simultaneously
-f.reg.single <- function(dv.sav = dv, 
-                        iv.sav = iv, 
-                        ctrl.sav = ctrl,
-                        dataframe.sav = p.df, 
-                        title.sav = "testingasdf", 
-                        effect.sav = "time",
-                        type.sav = "within", 
-                        dv_label.sav = NULL, 
-                        cov_label.sav = NULL) {
-    
-    formula_str <- paste0(dv.sav, "~", iv.sav, "+", ctrl.sav)
-    
-    model <- plm(as.formula(paste(formula_str, collapse = " ")),
-                        data = dataframe.sav,
-                        effect = effect.sav, 
-                        model = type.sav)
-    
-  stargazer(model,
-          type = starout,
-          report = "vc*sp",
-          dep.var.labels = paste0(title.sav),
-          dep.var.labels.include = T,
-          column.sep.width = "0pt",
-          float = FALSE,
-          header = FALSE,
-          no.space = TRUE,
-          font.size = "small",
-          # specific to this project
           column.labels = dv_label.sav,
           covariate.labels = cov_label.sav
           ) %>%
@@ -160,23 +119,94 @@ p.df <- df %>%
          state_party_control = factor(state_party_control, levels = c("Split", "Democratic", "Republican")))
 
 # Using time fixed effects only, as the unbalanced panel data makes it problematic to run county fixed effect in addition
-# dv <- c("log(county_totalvotes)", "log(democrat_county_vote)", "log(republican_county_vote)")
+
+### WITHOUT polling data results
 dv <- c("log(democrat_county_vote_perc)", "log(republican_county_vote_perc)")
-iv <- "redistrict_count + log(poll_perc) + log(vep_turnout_rate) + log(unemploymentRate) + state_party_control"
-# dv_label <- c("TOTAL-CountyVotes", "D-CountyVotes", "REP-CountyVotes", "OTH-CountyVotes")
-dv_label <- c("DEM % of county votes (log)", "REP % of county votes (log)")
-cov_label <- c("Redistricting attempts per election cycle [state-level]", "Polling station to laborforce ratio (log) [county-level]", "Voting-Eligible-Population turnout rate (log) [state-level]", "Unemployment rate  (log) [county-level]", "State legislature control - DEM", "State legislature control - REP")
+iv <- "redistrict_count + log(vep_turnout_rate) + log(unemploymentRate) + state_party_control"
+dv_label <- c("DEM candidate's % of county votes (log)", "REP candidate's % of county votes (log)")
+cov_label <- c("Redistricting attempts per election cycle [state-level]", 
+               "Voting-Eligible-Population turnout rate (log) [state-level]", 
+               "Unemployment rate  (log) [county-level]", 
+               "State legislature control - DEM", 
+               "State legislature control - REP")
 
 f.reg.multi(dv.sav = dv, iv.sav = iv, 
             dv_label.sav = dv_label, cov_label.sav = cov_label, 
-            title.sav = "Effect of Redistricting on Party Choice in Presidential Elections"
+            title.sav = ""
             # , star.type = "html",
-            # star.out = '05. Visualizations/regression-tbl.html'
+            # star.out = paste0("05. Visualizations/", today(), "-regression-tbl-nopolling.html")
             )
+
+summary(plm(as.formula(paste0(dv, "~", iv)),
+                        data = p.df,
+                        effect = "time",
+                        model = "within"))
+
+### WITH polling data results
+dv <- c("log(democrat_county_vote_perc)", "log(republican_county_vote_perc)")
+iv <- "redistrict_count + log(polling_station) + log(vep_turnout_rate) + log(unemploymentRate) + state_party_control"
+dv_label <- c("DEM candidate's % of county votes (log)", "REP candidate's % of county votes (log)")
+cov_label <- c("Redistricting attempts per election cycle [state-level]", 
+               "Polling station per county (log)",
+               "Voting-Eligible-Population turnout rate (log) [state-level]", 
+               "Unemployment rate  (log) [county-level]", 
+               "State legislature control - DEM", 
+               "State legislature control - REP")
+
+# Title = Effect of Redistricting on Party Choice in Presidential Elections
+f.reg.multi(dv.sav = dv, iv.sav = iv, 
+            dv_label.sav = dv_label, cov_label.sav = cov_label, 
+            title.sav = ""
+            # , star.type = "html",
+            # star.out = paste0("05. Visualizations/", today(), "-regression-tbl-polling.html")
+            )
+
+# Check N & T
+summary(plm(as.formula(paste0(dv, "~", iv)),
+                        data = p.df,
+                        effect = "time",
+                        model = "within"))
+
 
 ```
 
 ```{r regression - lagged dv}
+### Creating a function to run multiple regressions simultaneously
+f.reg.single <- function(dv.sav = dv, 
+                        iv.sav = iv, 
+                        ctrl.sav = ctrl,
+                        dataframe.sav = p.df, 
+                        title.sav = "testingasdf", 
+                        effect.sav = "time",
+                        type.sav = "within", 
+                        dv_label.sav = NULL, 
+                        cov_label.sav = NULL) {
+    
+    formula_str <- paste0(dv.sav, "~", iv.sav, "+", ctrl.sav)
+    
+    model <- plm(as.formula(paste(formula_str, collapse = " ")),
+                        data = dataframe.sav,
+                        effect = effect.sav, 
+                        model = type.sav)
+    
+  stargazer(model,
+          type = starout,
+          report = "vc*sp",
+          dep.var.labels = paste0(title.sav),
+          dep.var.labels.include = T,
+          column.sep.width = "0pt",
+          float = FALSE,
+          header = FALSE,
+          no.space = TRUE,
+          font.size = "small",
+          # specific to this project
+          column.labels = dv_label.sav,
+          covariate.labels = cov_label.sav
+          ) %>%
+    return()
+  
+}
+
 # Using time fixed effects only, as the unbalanced panel data makes it problematic to run county fixed effect in addition
 dv <- c("log(democrat_county_vote_perc)", "log(republican_county_vote_perc)")
 dv <- dv[2]

@@ -158,32 +158,38 @@ df4_2 <- df4_1 %>%
 
 ### Row binding all annual county unemployment data from 1997 to 2003
 
-# Collate files' paths
-unemp_county_files <- list.files(path = "02. Inputs/county_unemployment", full.names = TRUE, recursive = TRUE)
+# # Collate files' paths
+# unemp_county_files <- list.files(path = "02. Inputs/county_unemployment", full.names = TRUE, recursive = TRUE)
+# 
+# # Prepare empty data frame to catch
+# df_unemp <- data.frame(matrix(ncol = 8, nrow = 0))
+# 
+# # Loop each file into binding
+# for (file in unemp_county_files) {
+#   # Read xslx file
+#   file_data <- read_xlsx(file)
+#   # Remove headers and unnecessary columns to match to empty data frame
+#   file_slice <- file_data[-c(1:5),-c(1,6)] %>% 
+#     # Remove NA (Note: there are data entry of "N.A." in character)
+#     na.omit()
+#   # Rename columns
+#   names(file_slice) <- c("state_code",
+#                          "county_code",
+#                          "countyName_StateAbbreviation",
+#                          "year",
+#                          "laborForce",
+#                          "employed",
+#                          "unemployed",
+#                          "unemploymentRate")
+#   # Rbind
+#   df_unemp <- rbind(df_unemp, file_slice)
+# }
+# 
+# # Save df_unemp as an intermediary file
+# saveRDS(df_unemp, file = paste0("03. Intermediaries/df_unemp.rds"))
 
-# Prepare empty data frame to catch
-df_unemp <- data.frame(matrix(ncol = 8, nrow = 0))
-
-# Loop each file into binding
-for (file in unemp_county_files) {
-  # Read xslx file
-  file_data <- read_xlsx(file)
-  # Remove headers and unnecessary columns to match to empty data frame
-  file_slice <- file_data[-c(1:5),-c(1,6)] %>% 
-    # Remove NA (Note: there are data entry of "N.A." in character)
-    na.omit()
-  # Rename columns
-  names(file_slice) <- c("state_code",
-                         "county_code",
-                         "countyName_StateAbbreviation",
-                         "year",
-                         "laborForce",
-                         "employed",
-                         "unemployed",
-                         "unemploymentRate")
-  # Rbind
-  df_unemp <- rbind(df_unemp, file_slice)
-}
+# Reimport df_unemp
+df_unemp <- read_rds("03. Intermediaries/df_unemp.rds")
 
 ### Preparing data frame for merge
 # County expressions that need to be excluded
@@ -218,36 +224,42 @@ df5 <- df_unemp %>%
 
 ### Row bind all the county-level polling station data
 
-# Collate all files path
-poll_files_all <- list.files(path = "02. Inputs/us-polling-places/data", full.names = TRUE, recursive = TRUE)
+# # Collate all files path
+# poll_files_all <- list.files(path = "02. Inputs/us-polling-places/data", full.names = TRUE, recursive = TRUE)
+# 
+# # Filter for only polling station data
+# poll_files <- c()
+# for (file in poll_files_all){
+#   if(grepl("/output/", file)){
+#     poll_files <- append(poll_files, file)
+#   }
+# }
+# 
+# df_poll <- data.frame(matrix(ncol = 15, nrow = 0))
+# 
+# # Loop each file into binding
+# for (file in poll_files) {
+#   # Read csv file
+#   file_data <- read.csv(file)
+#   # Append state name from file path
+#   # state <- unlist(strsplit(file, "/"))[4]
+#   # file_data$state <- str_to_sentence(state)
+#   # Safety check for same number of columns before binding
+#   if (ncol(file_data) == 15){
+#     # Rbind
+#     df_poll <- rbind(df_poll, file_data)
+#   }
+#   else{
+#     print(file)
+#     print(ncol(file_data))
+#   }
+# }
+# 
+# # Save df_poll as an intermediary file
+# saveRDS(df_poll, file = paste0("03. Intermediaries/df_poll.rds"))
 
-# Filter for only polling station data
-poll_files <- c()
-for (file in poll_files_all){
-  if(grepl("/output/", file)){
-    poll_files <- append(poll_files, file)
-  }
-}
-
-df_poll <- data.frame(matrix(ncol = 15, nrow = 0))
-
-# Loop each file into binding
-for (file in poll_files) {
-  # Read csv file
-  file_data <- read.csv(file)
-  # Append state name from file path
-  # state <- unlist(strsplit(file, "/"))[4]
-  # file_data$state <- str_to_sentence(state)
-  # Safety check for same number of columns before binding
-  if (ncol(file_data) == 15){
-    # Rbind
-    df_poll <- rbind(df_poll, file_data)
-  }
-  else{
-    print(file)
-    print(ncol(file_data))
-  }
-}
+# Reimport df_poll
+df_poll <- read_rds("03. Intermediaries/df_poll.rds")
 
 ### Prepare data frame for merge
 df6 <- df_poll %>% 
@@ -288,7 +300,7 @@ df_final <- df_merge2
 
 ```{r export}
 ### Save dataset
-write.csv(df_final, file = paste0("04. Outputs/", today(), "_electiondataset.csv"))
+# write.csv(df_final, file = paste0("04. Outputs/", today(), "_electiondataset.csv"))
 saveRDS(df_final, file = paste0("04. Outputs/", today(), "_electiondataset.rds"))
 
 ```
