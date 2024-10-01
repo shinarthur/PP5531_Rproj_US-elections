@@ -219,3 +219,83 @@ f.reg.single(dv.sav = dv, iv.sav = iv, ctrl.sav = ctrl, title = dv)
 
 ```
 
+```{r did}
+
+### DID for pre-2016 and post-2016
+p.df <- df %>% 
+  pdata.frame(index = c("idkey", "year")) %>% 
+  mutate(democrat_county_vote_perc = democrat_county_vote / county_totalvotes,
+         republican_county_vote_perc = republican_county_vote / county_totalvotes,
+         poll_perc =  polling_station / laborForce,
+         state_party_control = factor(state_party_control, levels = c("Split", "Democratic", "Republican")),
+         time = case_when(year %in% c("2000", "2004", "2008", "2012") ~ 0,
+                          year %in% c("2016", "2020") ~ 1),
+         interaction = time * redistrict_count)
+
+### WITH polling data results
+dv <- c("log(democrat_county_vote_perc)", "log(republican_county_vote_perc)")
+iv <- "redistrict_count + time + redistrict_count:time + log(polling_station) + log(vep_turnout_rate) + log(unemploymentRate) + state_party_control"
+dv_label <- c("DEM candidate's % of county votes (log)", "REP candidate's % of county votes (log)")
+cov_label <- c("Redistricting attempts per election cycle [state-level]", 
+               "T",
+               "Interaction (Redistrict x T)",
+               "Polling station per county (log)",
+               "Voting-Eligible-Population turnout rate (log) [state-level]", 
+               "Unemployment rate  (log) [county-level]", 
+               "State legislature control - DEM", 
+               "State legislature control - REP")
+
+# Title = Effect of Redistricting on Party Choice in Presidential Elections
+f.reg.multi(dv.sav = dv, iv.sav = iv, 
+            dv_label.sav = dv_label, cov_label.sav = cov_label, 
+            title.sav = ""
+            , star.type = "html",
+            star.out = paste0("05. Visualizations/", today(), "-regression-tbl-polling-did2016.html")
+            )
+
+# Check N & T
+summary(plm(as.formula(paste0(dv, "~", iv)),
+                        data = p.df,
+                        effect = "time",
+                        model = "within"))
+
+
+
+### DID for pre-2020 and post-2020
+p.df <- df %>% 
+  pdata.frame(index = c("idkey", "year")) %>% 
+  mutate(democrat_county_vote_perc = democrat_county_vote / county_totalvotes,
+         republican_county_vote_perc = republican_county_vote / county_totalvotes,
+         poll_perc =  polling_station / laborForce,
+         state_party_control = factor(state_party_control, levels = c("Split", "Democratic", "Republican")),
+         time = case_when(year %in% c("2000", "2004", "2008", "2012", "2016") ~ 0,
+                          year %in% c("2020") ~ 1),
+         interaction = time * redistrict_count)
+
+### WITH polling data results
+dv <- c("log(democrat_county_vote_perc)", "log(republican_county_vote_perc)")
+iv <- "redistrict_count + time + interaction + log(polling_station) + log(vep_turnout_rate) + log(unemploymentRate) + state_party_control"
+dv_label <- c("DEM candidate's % of county votes (log)", "REP candidate's % of county votes (log)")
+cov_label <- c("Redistricting attempts per election cycle [state-level]", 
+               "T",
+               "Interaction (Redistrict x T)",
+               "Polling station per county (log)",
+               "Voting-Eligible-Population turnout rate (log) [state-level]", 
+               "Unemployment rate  (log) [county-level]", 
+               "State legislature control - DEM", 
+               "State legislature control - REP")
+
+# Title = Effect of Redistricting on Party Choice in Presidential Elections
+f.reg.multi(dv.sav = dv, iv.sav = iv, 
+            dv_label.sav = dv_label, cov_label.sav = cov_label, 
+            title.sav = ""
+            , star.type = "html",
+            star.out = paste0("05. Visualizations/", today(), "-regression-tbl-polling-did2020.html")
+            )
+
+# Check N & T
+summary(plm(as.formula(paste0(dv, "~", iv)),
+                        data = p.df,
+                        effect = "time",
+                        model = "within"))
+```
