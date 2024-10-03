@@ -1,0 +1,9 @@
+# state-level aggregation
+
+my_data <- X2024_09_26_electiondataset
+state_level_data <- my_data %>%
+     select(-idkey, -county_name) %>%  # Drop 'idkey' and 'county_name'
+     group_by(year, state, state_abv, state_party_control) %>%
+     summarise(across(where(is.numeric), sum, na.rm = TRUE))
+print(state_level_data)
+write.csv(state_level_data, "state_level_data.csv", row.names = FALSE)
