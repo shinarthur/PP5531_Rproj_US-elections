@@ -7,9 +7,12 @@ output: html_document
 
 ```{r setup, include = TRUE}
 
+# install.packages("usa")
+
 library(here)
 library(tidyverse)
 library(stringi)
+library(usa)
 
 ### Change directory here. 
 ### As long as file structure is same as github structure, directory does not need to be changed.
@@ -17,138 +20,46 @@ knitr::opts_knit$set(root.dir = here::here())
 
 ```
 
-# Preparing Data for Merge
-```{r df_housevote}
+# Create a Base Dataframe
+```{r base_df}
 
-### Clean workspace
-rm(list=ls())
+### Function to create a base dataframe
+f.create.basedf <- function(df, start_year, end_year){
+  electionyears <- c() # Empty dataframe to collect election years vector
+  temp.list <- list() # Empty list to nest year-added dataframes into
+  for(val in start_year:end_year){
+    # Narrow down election years (years that are divisible by 4)
+    if(val %% 4 == 0) {
+      electionyears <- c(electionyears, val)
+    }
+  }
+  # Create year-added dataframes with U.S. state data
+  for(i in 1:length(electionyears)){
+    val <- electionyears[[i]]
+    temp.df <- df %>% 
+      mutate(year = val) %>% 
+      relocate(year, .before = 1)
+    # Save data into a nested list
+    temp.list[[i]] <- temp.df
+  }
+  # Bind the rows of the nested list into the final base dataframe
+  return(bind_rows(temp.list))
+}
 
-### Import house votes
-### https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/IG0UN2 
-df_housevote <- read_csv("02. Inputs/1976-2022-house.csv")
-
-df_housevote.temp1 <- df_housevote %>%
-  mutate(party2 = case_when(party == "DEMOCRAT" ~ "DEM",
-                            party == "REPUBLICAN" ~ "REP",
-                            TRUE ~ "OTHER")) %>% 
-  group_by(year, state_po, district, party2) %>% 
-  summarize(party_vote = sum(candidatevotes),
-            .groups = "drop") %>% 
-  pivot_wider(id_cols = 1:3,
-              names_from = party2,
-              values_from = party_vote) %>% 
-  left_join(df_housevote %>% select(year, state_po, district, totalvotes),
-            by = join_by("year" == "year", "state_po" == "state_po", "district" == "district")) %>% 
-  replace(is.na(.), 0) %>% 
-  relocate(totalvotes, .after = district) %>% 
-  relocate(OTHER, .after = REP)
-
-View(df_housevote)
-
-
+base_df <- f.create.basedf(usa::states, 2000, 2020) %>% 
+  rename(state_name = name,
+         state_abv = abb)
+  
 ```
 
-
-
-
-
-```{r df_turnout}
-
-### Clean workspace
-rm(list=ls())
-
-### Import voter turnout data
-### https://election.lab.ufl.edu/dataset/1980-2022-general-election-turnout-rates/ 
-df_turnout <- read_csv("02. Inputs/Turnout_1980_2022_v1.0.csv")
-
-### Preparing dataframe for merging
-df1 <- df_turnout %>% 
-  # Changing percent string to numeric
-  mutate(across(c(NONCITIZEN_PCT, VEP_TURNOUT_RATE, VAP_TURNOUT_RATE), ~as.numeric(sub("%", "", .)))) %>%
-  # Removing columns unrelated to voter turnout rate
-  select(1:3, VEP_TURNOUT_RATE, VAP_TURNOUT_RATE, VEP, VAP) %>% 
-  # Renaming column names to lowercase (for easier merge)
-  rename_all(tolower)
-
-```
-
-```{r df_candivote}
-
-### Import "votes for each presidential candidate"
-### https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/VOQCHQ
-df_candivote <- read_csv("02. Inputs/countypres_2000-2020.csv")
-
-### Preparing dataframe for merging
-df2_1 <- df_candivote %>% 
-  # Only considering Democrat, Republican, and Other (ignoring Green, Libertarian, etc)
-  mutate(party_n = case_when(party == "DEMOCRAT" ~ "Democrat",
-                             party == "REPUBLICAN" ~ "Republican",
-                             TRUE ~ "Other")) %>% 
-  group_by(year, state, county_name, office, party_n) %>% 
-  summarize(county_partyvotes = sum(candidatevotes),
-            .groups = "drop") %>% 
-  # Changing state and county names from all caps to sentence caps
-  mutate_at(c("state", "county_name"), ~str_to_sentence(.)) %>% 
-  # Redundancy check, narrowing to only U.S. Presidential elections
-  filter(office == "US PRESIDENT") %>% 
-  select(-office) %>% 
-  # Find county level total votes
-  group_by(year, state, county_name) %>% 
-  mutate(county_totalvotes = sum(county_partyvotes)) %>% 
-  # Pivot to wide data format
-  mutate(party = paste0(party_n,"_county_vote")) %>% 
-  select(-party_n) %>% 
-  pivot_wider(names_from = party,
-              values_from = county_partyvotes) %>% 
-  # Reorder variables
-  relocate(Republican_county_vote, .after = Democrat_county_vote) %>% 
-  relocate(county_totalvotes, .after = Other_county_vote) %>% 
-  # Renaming column names to lowercase (for easier merge)
-  rename_all(tolower) %>% 
-  # Getting state level totals
-  group_by(year, state) %>% 
-  mutate(state_totalvotes = sum(county_totalvotes))
-
-# Extracting state abbreviations
-df2_2 <- df_candivote %>% 
-  select(state, state_po) %>% 
-  mutate(state = str_to_sentence(state)) %>% 
-  rename(state_abv = state_po) %>% 
-  group_by(state) %>% 
-  unique()
-
-### Merging back state abbreviations
-df2 <- left_join(df2_1, df2_2, by = "state") %>% 
-  relocate(state_abv, .after = state)
-
-```
-
-```{r df_crime}
-
-### Import state crime rate
-### https://corgis-edu.github.io/corgis/csv/state_crime/
-df_crime <- read_csv("02. Inputs/state_crime.csv")
-
-### Preparing dataframe for merging
-df3 <- df_crime %>% 
-  # Renaming column names to lowercase (for easier merge)
-  rename_all(tolower) %>% 
-  # Renaming column names to "crime" for easier indexing
-  rename_with(~ gsub("data","statecrime",.), contains("data")) %>% 
-  # Merging state abbreviations
-  mutate(state = str_to_sentence(state)) %>% 
-  left_join(df2_2, by = "state") %>% 
-  relocate(state_abv, .after = state)
-
-```
-
-```{r df_redist}
+```{r base_redist_df}
 
 ### Import redistricting data
 ### https://redistricting.lls.edu/national-overview/?colorby=Plan%20Status&level=Congress&cycle=2020
-df_redist <- read_csv("02. Inputs/StatesAndCyclesData_production-20240301a.csv")
+IMPORT.redist <- read_csv("02. Inputs/StatesAndCyclesData_production-20240301a.csv")
 
-df4_1 <- df_redist %>% 
+### Preparing dataframe for merging
+df_redist.temp1 <- IMPORT.redist %>% 
   # Renaming column names to lowercase (for easier merge)
   rename_all(tolower) %>% 
   # Extracting the year the redistricting plan was passed
@@ -165,26 +76,146 @@ df4_1 <- df_redist %>%
     (pass_year > 2016 & pass_year <= 2020) ~ 2020,
     (pass_year > 2020 & pass_year <= 2024) ~ 2024
   )) %>% 
-  # Filters that need to be adjusted
-  filter(level == "State Lower") %>%
-  select(state, pass_year, elect_year, level, `party control`, `drawn by`)
+  # Filter to congressional redistricting
+  filter(level == "Congress") %>%
+  select(state, elect_year, `court action`)
 
-df4_2 <- df4_1 %>% 
-  group_by(elect_year, state) %>%
-  summarize(n = n(),
-            rep_ctrl = sum(`party control` == "Republican"),
-            dem_ctrl = sum(`party control` == "Democratic"),
-            split_ctrl = sum(`party control` == "Split")) %>%
-  mutate(state_party_control = case_when(!rep_ctrl + dem_ctrl + split_ctrl == n ~ "Uncertain",
-                           rep_ctrl / n > 0.5 ~ "Republican",
-                           dem_ctrl / n > 0.5 ~ "Democratic",
-                           split_ctrl / n > 0.5 ~ "Split",
-                           TRUE ~ "Split")) %>% 
-  select(-rep_ctrl, -dem_ctrl, -split_ctrl) %>% 
-  arrange(desc(n)) %>% 
-  rename(redistrict_count = n)
+# Editing data for redistricting & court actions
+df_redist.temp2 <- df_redist.temp1 %>% 
+  # Add a "no redistricting" variable
+  mutate(`court action` = if_else(is.na(`court action`), "court_action_none", `court action`)) %>%
+  # Lower case entries for harmonization
+  mutate(`court action` = tolower(`court action`)) %>%
+  # Count the number of instances per court action category
+  group_by(state, elect_year, `court action`) %>% 
+  summarize(n = n(), .groups = "drop") %>%
+  # Change to wider dataframe
+  pivot_wider(names_from = `court action`,
+              values_from = n)
+
+# Check if all-NAs exist
+df_redist.temp2 %>%
+  filter(is.na(`court_action_none`) & is.na(`rejected challenge to leg. map`) 
+         & is.na(`court drew map (not legislature)`) & is.na(`court sent map back to legislature`)
+         & is.na(`pending litigation`) & is.na(`rejected challenge to commission map`)) %>%
+  str()
+
+# Consolidate court actions
+df_redist.temp3 <- df_redist.temp2 %>% 
+  replace(is.na(.), 0) %>% 
+  mutate(court_challenge_rejected = `rejected challenge to leg. map` + `rejected challenge to commission map`) %>%
+  select(-`rejected challenge to leg. map`, -`rejected challenge to commission map`, -`pending litigation`) %>% 
+  rename(court_map_drawn_count = `court drew map (not legislature)`,
+         court_return_leg_count = `court sent map back to legislature`,
+         court_action_none_count = court_action_none,
+         court_challenge_rejected_count = court_challenge_rejected
+         )
+
+### Merge redistricting data with 
+base_redist_df <- left_join(base_df, df_redist.temp3,
+          by = join_by("year" == "elect_year", "state_abv" == "state")) %>% 
+  mutate(across(starts_with("court_"), ~ coalesce(., 0))) %>% 
+  mutate(redistrict_VAR = case_when(court_action_none_count > 0 | court_map_drawn_count > 0 | court_return_leg_count > 0 | court_challenge_rejected_count > 0 ~ 1,
+                                   TRUE ~ 0)) %>% 
+  relocate(redistrict_VAR, .before = court_action_none_count)
+
+### Cleanwork space
+rm(list = grep("temp", ls(), value = TRUE))
 
 ```
+
+# Preparing Data for Merge
+
+```{r df_housevote}
+
+### Import house votes
+### https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/IG0UN2 
+IMPORT.housevote <- read_csv("02. Inputs/1976-2022-house.csv")
+
+### Preparing dataframe for merging
+df_housevote.temp1 <- IMPORT.housevote %>%
+  # Only considering Democrat, Republican candidates. Other parties are classified as "OTHER".
+  mutate(party2 = case_when(party == "DEMOCRAT" ~ "DEM",
+                            party == "REPUBLICAN" ~ "REP",
+                            TRUE ~ "OTHER")) %>% 
+  group_by(year, state_po, district, party2) %>% 
+  summarize(party_vote = sum(candidatevotes),
+            .groups = "drop") %>% 
+  # Creating wide dataframe
+  pivot_wider(id_cols = 1:3,
+              names_from = party2,
+              values_from = party_vote) %>% 
+  # Merging back total votes per district
+  left_join(IMPORT.housevote %>% select(year, state_po, district, totalvotes) %>% distinct(),
+            by = join_by("year" == "year", "state_po" == "state_po", "district" == "district")) %>% 
+  # Replacing missing values with 0 (missing values caused by the pivot_wider)
+  replace(is.na(.), 0) %>% 
+  # Relocating columns to more appropriate locations
+  relocate(totalvotes, .after = district) %>% 
+  relocate(OTHER, .after = REP) %>% 
+  # Filtering states with total votes <= 1 (which indicate no contestation or NA values)
+  filter(totalvotes >= 1) %>% 
+  # Converting votes per party into percentage of votes cast per district
+  mutate(across(c("DEM", "REP", "OTHER"), ~ ./totalvotes , .names = '{col}_perc'))
+
+# Identifying average percentage of votes cast for a party in a state (average across districts)
+df_housevote.temp2 <- df_housevote.temp1 %>% 
+  group_by(year, state_po) %>% 
+  summarize(avg_DEMvote_perc = mean(DEM_perc, na.rm = T),
+            avg_REPvote_perc = mean(REP_perc, na.rm = T),
+            avg_OTHERvote_perc = mean(OTHER_perc, na.rm = T),
+            state_totalvotes = sum(totalvotes, na.rm = T))
+
+df_housevote <- df_housevote.temp2
+
+### Cleanwork space
+rm(list = grep("temp", ls(), value = TRUE))
+
+```
+
+
+```{r df_turnout}
+
+### Import voter turnout data
+### https://election.lab.ufl.edu/dataset/1980-2022-general-election-turnout-rates/ 
+IMPORT.turnout <- read_csv("02. Inputs/Turnout_1980_2022_v1.0.csv")
+
+### Preparing dataframe for merging
+df_turnout <- IMPORT.turnout %>% 
+  # Changing percent string to numeric
+  mutate(across(c(NONCITIZEN_PCT, VEP_TURNOUT_RATE, VAP_TURNOUT_RATE), ~as.numeric(sub("%", "", .)))) %>%
+  # Removing columns unrelated to voter turnout rate
+  select(1:3, VEP_TURNOUT_RATE, VAP_TURNOUT_RATE, VEP, VAP) %>% 
+  # Renaming column names to lowercase (for easier merge)
+  rename_all(tolower)
+
+```
+
+```{r df_crime}
+
+### Import state crime rate
+### https://corgis-edu.github.io/corgis/csv/state_crime/
+IMPORT.crime <- read_csv("02. Inputs/state_crime.csv")
+
+### Preparing dataframe for merging
+df_crime <- IMPORT.crime %>% 
+  # Renaming column names to lowercase (for easier merge)
+  rename_all(tolower) %>% 
+  # Renaming column names to "crime" for easier indexing
+  rename_with(~ gsub("data","statecrime",.), contains("data"))
+
+# Extract statenames from df_crime and df_base to check if names are identical
+df_crime_statename.temp <- df_crime %>% select(state) %>% distinct() %>% arrange() %>% mutate(x = 1)
+df_base_statename.temp <- base_df %>% select(state_name) %>% distinct() %>% arrange() %>% mutate(y = 1)
+full_join(df_crime_statename.temp, df_base_statename.temp, by = join_by("state" == "state_name")) %>% 
+  filter(is.na(x) | is.na(y))
+
+### Cleanwork space
+rm(list = grep("temp", ls(), value = TRUE))
+
+```
+
+
 
 ```{r df_unemp, results='hide', message=FALSE}
 ### Source county unemployment rate from the following link:
@@ -192,7 +223,7 @@ df4_2 <- df4_1 %>%
 
 ### Row binding all annual county unemployment data from 1997 to 2003
 
-# # Collate files' paths
+# Collate files' paths
 # unemp_county_files <- list.files(path = "02. Inputs/county_unemployment", full.names = TRUE, recursive = TRUE)
 # 
 # # Prepare empty data frame to catch
@@ -203,7 +234,7 @@ df4_2 <- df4_1 %>%
 #   # Read xslx file
 #   file_data <- read_xlsx(file)
 #   # Remove headers and unnecessary columns to match to empty data frame
-#   file_slice <- file_data[-c(1:5),-c(1,6)] %>% 
+#   file_slice <- file_data[-c(1:5),-c(1,6)] %>%
 #     # Remove NA (Note: there are data entry of "N.A." in character)
 #     na.omit()
 #   # Rename columns
@@ -226,29 +257,33 @@ df4_2 <- df4_1 %>%
 df_unemp <- read_rds("03. Intermediaries/df_unemp.rds")
 
 ### Preparing data frame for merge
-# County expressions that need to be excluded
-countyexpressions <- c(" Borough/municipality" = "",  " Borough/city" = "", " County/city" = "", " County" = "", " Census Area"  = "", " Borough" = "", "/" = "")
-
-df5 <- df_unemp %>% 
+df_unemp_state.temp1 <- df_unemp %>% 
   # Extracting state abbreviations
   mutate(state_abv = case_when(
     # District of Columbia manually labelled as "DC"
     countyName_StateAbbreviation == "District of Columbia" ~ "DC",
     # Extracting the abbreviation from the last two letters of the countyName_StateAbbreviation string
     TRUE ~ substr(countyName_StateAbbreviation, start = nchar(countyName_StateAbbreviation)-1, stop = nchar(countyName_StateAbbreviation)))) %>% 
-  # Extracting county name
-  mutate(county_name.temp1 = str_remove_all(countyName_StateAbbreviation, paste0(", ", state_abv)),
-         # Harmonizing county name by removing expressions in `countryexpressions`
-         county_name.temp2 = str_remove_all(county_name.temp1, countyexpressions),
-         # Harmonizing county names by changing to sentence case
-         county_name = str_to_sentence(county_name.temp2)) %>%
   # Selecting relevant columns only
-  select(year, state_abv, county_name, laborForce, employed, unemployed, unemploymentRate) %>% 
+  select(year, state_abv, laborForce, employed, unemployed, unemploymentRate) %>% 
   # Change NA string to null values
   mutate_all(~na_if(., "N.A.")) %>% 
   # Changing variable to numeric
   mutate(across(c("year", "laborForce", "employed", "unemployed", "unemploymentRate"
                   ), ~as.numeric(.)))
+
+# State aggregated data
+df_unemp_state.temp2 <- df_unemp_state.temp1 %>% 
+  group_by(year, state_abv) %>% 
+  summarize(state_laborForce = sum(laborForce, na.rm = T),
+            state_employed = sum(employed, na.rm = T),
+            state_unemployed = sum(unemployed, na.rm = T),
+            state_unemploymentRate = mean(unemploymentRate, na.rm = T))
+
+df_unemp_state <- df_unemp_state.temp2
+
+### Cleanwork space
+rm(list = grep("temp", ls(), value = TRUE))
 
 ```
 
@@ -296,7 +331,7 @@ df5 <- df_unemp %>%
 df_poll <- read_rds("03. Intermediaries/df_poll.rds")
 
 ### Prepare data frame for merge
-df6 <- df_poll %>% 
+df_poll_state <- df_poll %>% 
   # replace county name with "non-county" value when county name is NA or empty
   mutate(county_name = if_else((county_name == "" | is.na(county_name)), "non-county", county_name)) %>%
   # Harmonise cases
@@ -304,31 +339,30 @@ df6 <- df_poll %>%
   # Extract election year & harmonize to numeric
   mutate(election_year = as.numeric(substr(election_date, start = 1, stop = 4))) %>% 
   # filter out jurisdiction with no names (they are likely precincts)
-  filter(jurisdiction != "") %>%
-  # Tally by election year for each county
-  group_by(election_year, county_name, state) %>% 
+  # filter(jurisdiction != "") %>%
+  # Tally by election year for each state
+  group_by(election_year, state) %>% 
   summarize(polling_station = n())
 
 ```
 
 # Merging Data
+Things to join:
+* df_housevote
+* df_turnout
+* df_poll_state
+* df_unemp_state
+* df_crime
+
 ```{r merge}
 
 ### Merge dataframes
-# Df2 is primary, because it has county level and state level
-df_merge1 <- df2 %>% 
-  left_join(df1 %>%  select(-state), by = join_by("year" == "year", "state_abv" == "state_abv")) %>%  
-  left_join(df3 %>% select(-state), by = join_by("year" == "year", "state_abv" == "state_abv")) %>% 
-  left_join(df4_2, by = join_by("year" == "elect_year", "state_abv" == "state")) %>% 
-  mutate(idkey = paste0(state_abv,"_", county_name)) %>%
-  relocate(idkey, .before = 1)
-
-df_merge2 <- df_merge1 %>% 
-  left_join(df5, by = join_by("year" == "year", "state_abv" == "state_abv", "county_name" == "county_name")) %>%
-  left_join(df6, by = join_by("year" == "election_year", "county_name" == "county_name", "state_abv" == "state" )) %>% 
-  mutate(across(c("state_abv", "county_name", "state_party_control"), ~as.factor(.)))
-
-df_final <- df_merge2
+df_final <- base_redist_df %>% 
+  left_join(df_housevote, by = join_by("year" == "year", "state_abv" == "state_po")) %>% 
+  left_join(df_turnout %>% select(-state), by = join_by("year" == "year", "state_abv" == "state_abv")) %>% 
+  left_join(df_poll_state, by = join_by("year" == "election_year", "state_abv" == "state")) %>% 
+  left_join(df_unemp_state, by = join_by("year" == "year", "state_abv" == "state_abv")) %>% 
+  left_join(df_crime, by = join_by("year" == "year", "state_name" == "state"))
 
 ```
 
@@ -341,8 +375,9 @@ saveRDS(df_final, file = paste0("04. Outputs/", today(), "_electiondataset.rds")
 
 # Additional Data Edits
 ```{r additional edits}
+rm(list=ls())
 
-df <- read_rds("04. Outputs/2024-09-26_electiondataset.rds")
+df <- read_rds("04. Outputs/2024-10-03_electiondataset.rds")
 
 ```
 
