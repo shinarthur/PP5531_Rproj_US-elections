@@ -224,6 +224,7 @@ f.reg.single(dv.sav = dv, iv.sav = iv, ctrl.sav = ctrl, title = dv)
 
 ### DID for pre-2016 and post-2016
 p.df <- df %>% 
+<<<<<<< Updated upstream
   pdata.frame(index = c("idkey", "year")) %>% 
   filter(year %in% c("2016", "2020")) %>% 
   mutate(democrat_county_vote_perc = democrat_county_vote / county_totalvotes,
@@ -246,6 +247,30 @@ p.df <- df %>%
 dv <- c("log(democrat_county_vote_perc)", "log(republican_county_vote_perc)")
 iv <- "redistrict_count + time + interaction + log(polling_station) + log(vep_turnout_rate) + log(unemploymentRate) # + state_party_control
 "
+=======
+  mutate(across(c(court_action_none_count, court_map_drawn_count, court_return_leg_count, court_challenge_rejected_count), 
+                ~case_when(. >= 1 ~ 1,
+                           . == 0 ~ 0),
+                .names = "{.col}_VAR")) %>% 
+  filter(avg_DEMvote_perc > 0.0001 & avg_REPvote_perc > 0.0001) %>%
+  mutate(#democrat_county_vote_perc = democrat_county_vote / county_totalvotes,
+         #republican_county_vote_perc = republican_county_vote / county_totalvotes,
+         #poll_perc =  polling_station / state_laborForce,
+         #state_party_control = factor(state_party_control, levels = c("Split", "Democratic", "Republican")), [missing?]
+         time = case_when(year %in% c("2000", "2004", "2008") ~ 0,
+                          year %in% c("2012", "2016", "2020") ~ 1),
+         #time = case_when(year %in% c("2016") ~ 0,
+         #                 year %in% c("2020") ~ 1),
+         interaction = time * court_return_leg_count_VAR,
+         ) %>% 
+  pdata.frame(index = c("state_abv", "year"))
+
+### WITH polling data results
+dv <- c("log(avg_DEMvote_perc)", "log(avg_REPvote_perc)")
+# dv <- "log(vep_turnout_rate)"
+iv <- "time*court_action_none_count_VAR + log(state_unemploymentRate) + log(statecrime.totals.violent.all) + log(vep_turnout_rate)"
+
+>>>>>>> Stashed changes
 dv_label <- c("DEM candidate's % of county votes (log)", "REP candidate's % of county votes (log)")
 cov_label <- c("Redistricting attempts per election cycle [state-level]", 
                "T",
@@ -259,6 +284,7 @@ cov_label <- c("Redistricting attempts per election cycle [state-level]",
 
 # Title = Effect of Redistricting on Party Choice in Presidential Elections
 f.reg.multi(dv.sav = dv, iv.sav = iv, 
+<<<<<<< Updated upstream
             dv_label.sav = dv_label, cov_label.sav = cov_label, 
             title.sav = ""
             , star.type = "html",
@@ -314,6 +340,22 @@ summary(plm(as.formula(paste0(dv, "~", iv)),
                         data = p.df,
                         effect = "time",
                         model = "within"))
+=======
+            dv_label.sav = NULL, cov_label.sav = NULL, 
+            effect.sav = "twoways",
+            type.sav = "within", 
+            title.sav = "",
+            # , star.type = "html",
+            # star.out = paste0("05. Visualizations/", today(), "-regression-tbl-polling-did.html")
+            )
+
+# Check N & T
+# summary(plm(as.formula(paste0(dv, "~", iv)),
+#                         data = p.df
+#                         , effect = "twoways",
+#                         model = "within"
+#            ))
+>>>>>>> Stashed changes
 
 */
 ```
