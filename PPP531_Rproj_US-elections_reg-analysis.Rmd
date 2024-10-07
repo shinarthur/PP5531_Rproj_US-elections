@@ -26,7 +26,28 @@ rm(list=ls())
 
 df <- read_rds("04. Outputs/2024-10-03_electiondataset.rds")
 
-legend <- df %>% 
+treatedVAR.2012.temp <- df %>% 
+  mutate(year_num = as.numeric(year)) %>%
+  filter(year_num == 2012) %>% 
+  select(state_abv, redistrict_VAR, court_action_none_count, court_map_drawn_count, court_return_leg_count, court_challenge_rejected_count) %>% 
+  rename_all(~paste0(., "_VAR"))
+
+treatedVAR.2012post.temp <- df %>% 
+  mutate(year_num = as.numeric(year)) %>%
+  filter(year_num >= 2012) %>% 
+  left_join(treatedVAR.2012.temp, by = join_by("state_abv" == "state_abv_VAR"),
+            multiple = "all")
+
+treatedVAR.2012pre.temp <- df %>% 
+  mutate(year_num = as.numeric(year)) %>% 
+  filter(year_num < 2012)
+  
+# Bind Rows
+df_treated <- bind_rows(treatedVAR.2012post.temp, treatedVAR.2012pre.temp) %>% 
+  arrange(state_abv, year_num) %>% 
+  mutate(across(redistrict_VAR_VAR:court_challenge_rejected_count_VAR, ~case_when(is.na(.) ~ 0,
+                                                                                   TRUE ~ .)))
+legend <- df_treated %>% 
   colnames() %>% 
   as.data.frame()
   
@@ -223,13 +244,9 @@ f.reg.single(dv.sav = dv, iv.sav = iv, ctrl.sav = ctrl, title = dv)
 ```{r did}
 
 ### Panel Data Frame for DID
-p.df <- df %>% 
+p.df <- df_treated %>% 
   filter(avg_DEMvote_perc > 0.0001 & avg_REPvote_perc > 0.0001) %>% 
-  mutate(#democrat_county_vote_perc = democrat_county_vote / county_totalvotes,
-         #republican_county_vote_perc = republican_county_vote / county_totalvotes,
-         #poll_perc =  polling_station / state_laborForce,
-         #state_party_control = factor(state_party_control, levels = c("Split", "Democratic", "Republican")), [missing?]
-         time = case_when(year %in% c("2000", "2004", "2008") ~ 0,
+  mutate(time = case_when(year %in% c("2000", "2004", "2008") ~ 0,
                           year %in% c("2012", "2016", "2020") ~ 1)
          #, time = case_when(year %in% c("2016") ~ 0,
          #                 year %in% c("2020") ~ 1),
@@ -242,20 +259,22 @@ p.df <- df %>%
          interaction_court_action_none_count = time * court_action_none_count_VAR,
          interaction_court_map_drawn_count = time * court_map_drawn_count_VAR,
          interaction_court_return_leg_count = time * court_return_leg_count_VAR,
-         interaction_court_challenge_rejected_count = time * court_challenge_rejected_count_VAR,) %>%
-  mutate(t_year = case_when(year %in% c("2000") ~ -3,
-                            year %in% c("2004") ~ -2,
-                            year %in% c("2008") ~ -1,
-                            year %in% c("2012") ~ 1,
-                            year %in% c("2016") ~ 2,
-                            year %in% c("2020") ~ 3),
-         court_VAR = case_when(court_action_none_count == 0 ~ 1,
-                               court_action_none_count == 1 ~ 0),
-         court_did_VAR = ) %>% 
-  
-  pdata.frame(index = c("state_abv", "year"))
+         interaction_court_challenge_rejected_count = time * court_challenge_rejected_count_VAR) %>% 
+    pdata.frame(index = c("state_abv", "year")) 
 
+temp.variable_list <- c("court_action_none_count", "court_map_drawn_count", "court_return_leg_count", "court_challenge_rejected_count")
 
+for(val in temp.variable_list){
+  p.df %>% 
+    filter(year == 2020) %>% 
+    select(paste0(val)) %>% 
+    table() %>% 
+    print()
+}
+
+p.df %>% 
+
+  View()
 
 ### WITH redistrict_VAR
 dv <- c("log(avg_DEMvote_perc)", "log(avg_REPvote_perc)")
