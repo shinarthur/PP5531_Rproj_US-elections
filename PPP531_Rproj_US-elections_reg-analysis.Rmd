@@ -46,12 +46,28 @@ treatedVAR.2012pre.temp <- df %>%
 df_treated <- bind_rows(treatedVAR.2012post.temp, treatedVAR.2012pre.temp) %>% 
   arrange(state_abv, year_num) %>% 
   mutate(across(redistrict_VAR_VAR:court_challenge_rejected_count_VAR, ~case_when(is.na(.) ~ 0,
+                                                                                  . >= 1 ~ 1,
                                                                                    TRUE ~ .)))
 legend <- df_treated %>% 
   colnames() %>% 
   as.data.frame()
   
 ```
+
+```{r data-check}
+
+temp.variable_list <- c("court_action_none_count_VAR", "court_map_drawn_count_VAR", "court_return_leg_count_VAR", "court_challenge_rejected_count_VAR")
+
+for(val in temp.variable_list){
+  df_treated %>% 
+    filter(year_num == 2012) %>% 
+    select(paste0(val)) %>% 
+    table() %>% 
+    print()
+}
+
+```
+
 
 # Functions
 ```{r custom reg function}
@@ -261,20 +277,6 @@ p.df <- df_treated %>%
          interaction_court_return_leg_count = time * court_return_leg_count_VAR,
          interaction_court_challenge_rejected_count = time * court_challenge_rejected_count_VAR) %>% 
     pdata.frame(index = c("state_abv", "year")) 
-
-temp.variable_list <- c("court_action_none_count", "court_map_drawn_count", "court_return_leg_count", "court_challenge_rejected_count")
-
-for(val in temp.variable_list){
-  p.df %>% 
-    filter(year == 2020) %>% 
-    select(paste0(val)) %>% 
-    table() %>% 
-    print()
-}
-
-p.df %>% 
-
-  View()
 
 ### WITH redistrict_VAR
 dv <- c("log(avg_DEMvote_perc)", "log(avg_REPvote_perc)")
