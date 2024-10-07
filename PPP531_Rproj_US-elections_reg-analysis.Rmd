@@ -281,6 +281,9 @@ p.df <- df_treated %>%
   #        interaction_court_challenge_rejected_count = time * court_challenge_rejected_count_VAR) %>% 
     pdata.frame(index = c("state_abv", "year")) 
 
+# TODO collapse jud_var
+# new R chunk for did
+
 ### WITH redistrict_VAR
 dv <- c("log(avg_DEMvote_perc)", "log(avg_REPvote_perc)")
 iv <- "court_map_drawn_count_VAR * time + log(vep_turnout_rate) + log(state_unemploymentRate)"
