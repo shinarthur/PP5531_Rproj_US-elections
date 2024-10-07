@@ -402,42 +402,36 @@ df_final.temp1 <- df_merge %>%
 
 ### Creating Binary Treatment Variables
 # Court action status in 2012 (Treatment variable)
-treatedVAR.2012.temp <- df_final.temp1 %>%
+treatedVAR.2012.temp <- df_final.temp1 %>% 
   mutate(year_num = as.numeric(year)) %>%
-  filter(year_num == 2012) %>%
-  select(state_abv, redistrict_VAR, court_action_none_count, court_map_drawn_count, court_return_leg_count, court_challenge_rejected_count) %>%
-  rename_all(~paste0(., "_VAR")) %>%
-  mutate(judiciary_VAR = case_when(redistrict_VAR_VAR == 1
-                                   & (court_map_drawn_count_VAR == 1
-                                       | court_return_leg_count_VAR == 1
-                                       | court_challenge_rejected_count_VAR == 1) ~ 1,
+  filter(year_num == 2012) %>% 
+  select(state_abv, redistrict_VAR, court_action_none_count, court_map_drawn_count, court_return_leg_count, court_challenge_rejected_count) %>% 
+  rename_all(~paste0(., "_VAR")) %>% 
+  mutate(judiciary_VAR = case_when(redistrict_VAR_VAR == 1 
+                                   & (court_map_drawn_count_VAR == 1 
+                                      | court_return_leg_count_VAR == 1 
+                                      | court_challenge_rejected_count_VAR == 1) ~ 1,
                                    TRUE ~ 0))
 
-# Left join court action status to all years 
-df_final.temp2 <- df_final.temp1 %>% 
-  mutate(year_num = as.numeric(year)) %>% 
+# Left join court action status in 2012 to 2012on-wawrds subsetted data
+treatedVAR.2012post.temp <- df_final.temp1 %>% 
+  mutate(year_num = as.numeric(year)) %>%
+  filter(year_num >= 2012) %>% 
   left_join(treatedVAR.2012.temp, by = join_by("state_abv" == "state_abv_VAR"),
-             multiple = "all")
+            multiple = "all")
 
-# # Left join court action status in 2012 to 2012on-wawrds subsetted data
-# treatedVAR.2012post.temp <- df_final.temp1 %>% 
-#   mutate(year_num = as.numeric(year)) %>%
-#   #filter(year_num >= 2012) %>% 
-#   left_join(treatedVAR.2012.temp, by = join_by("state_abv" == "state_abv_VAR"),
-#             multiple = "all")
-# 
-# # Subset of pre-2012 (no treatment)
-# treatedVAR.2012pre.temp <- df_final.temp1 %>% 
-#   mutate(year_num = as.numeric(year)) %>% 
-#   filter(year_num < 2012)
+# Subset of pre-2012 (no treatment)
+treatedVAR.2012pre.temp <- df_final.temp1 %>% 
+  mutate(year_num = as.numeric(year)) %>% 
+  filter(year_num < 2012)
   
-# # Bind Rows of pre-2012 & 2012-onwards
-# df_final.temp2 <- bind_rows(treatedVAR.2012post.temp, treatedVAR.2012pre.temp) # %>% 
-#   arrange(state_abv, year_num) %>% 
-#   # Change pre-2012 binary treatment variable to 0
-#   mutate(across(redistrict_VAR_VAR:judiciary_VAR, ~case_when(is.na(.) ~ 0,
-#                                                              . >= 1 ~ 1,
-#                                                              TRUE ~ .)))
+# Bind Rows of pre-2012 & 2012-onwards
+df_final.temp2 <- bind_rows(treatedVAR.2012post.temp, treatedVAR.2012pre.temp) %>% 
+  arrange(state_abv, year_num) %>% 
+  # Change pre-2012 binary treatment variable to 0
+  mutate(across(redistrict_VAR_VAR:judiciary_VAR, ~case_when(is.na(.) ~ 0,
+                                                             . >= 1 ~ 1,
+                                                             TRUE ~ .)))
 
 ```
 
