@@ -24,7 +24,7 @@ knitr::opts_knit$set(root.dir = here::here())
 ```{r import data}
 rm(list=ls())
 
-df <- read_rds("04. Outputs/2024-09-26_electiondataset.rds")
+df <- read_rds("04. Outputs/2024-10-03_electiondataset.rds")
 
 legend <- df %>% 
   colnames() %>% 
@@ -53,10 +53,10 @@ f.reg.multi <- function(dv.sav = dv,
     
     formula_str <- paste0(val, "~", iv.sav)
     
-    templist[[i]] <- lm(as.formula(paste(formula_str, collapse = " ")),
+    templist[[i]] <- plm(as.formula(paste(formula_str, collapse = " ")),
                         data = dataframe.sav
-                        #, effect = effect.sav, 
-                        #model = type.sav
+                        , effect = effect.sav, 
+                        model = type.sav
                         )
   }
     
@@ -222,37 +222,39 @@ f.reg.single(dv.sav = dv, iv.sav = iv, ctrl.sav = ctrl, title = dv)
 
 ```{r did}
 
-### DID for pre-2016 and post-2016
+### Panel Data Frame for DID
 p.df <- df %>% 
-  pdata.frame(index = c("idkey", "year")) %>% 
-  filter(year %in% c("2016", "2020")) %>% 
-  mutate(democrat_county_vote_perc = democrat_county_vote / county_totalvotes,
-         republican_county_vote_perc = republican_county_vote / county_totalvotes,
-         poll_perc =  polling_station / laborForce,
-         state_party_control = factor(state_party_control, levels = c("Split", "Democratic", "Republican")),
-         #time = case_when(year %in% c("2000", "2004", "2008", "2012") ~ 0,
-         #                 year %in% c("2016", "2020") ~ 1),
-         time = case_when(year %in% c("2016") ~ 0,
-                          year %in% c("2020") ~ 1),
-         redistrict_count = case_when(redistrict_count == "1" | redistrict_count == "2" ~ 1,
-                                      is.na(redistrict_count) ~ 0),
-         interaction = time * redistrict_count,
-         #redistrict_count = as.factor(redistrict_count),
-         #time = as.factor(time),
-         #interaction = as.factor(interaction)
-         )
+  pdata.frame(index = c("state_abv", "year")) %>% 
+  filter(avg_DEMvote_perc > 0.0001 & avg_REPvote_perc > 0.0001) %>% 
+  mutate(#democrat_county_vote_perc = democrat_county_vote / county_totalvotes,
+         #republican_county_vote_perc = republican_county_vote / county_totalvotes,
+         #poll_perc =  polling_station / state_laborForce,
+         #state_party_control = factor(state_party_control, levels = c("Split", "Democratic", "Republican")), [missing?]
+         time = case_when(year %in% c("2000", "2004", "2008") ~ 0,
+                          year %in% c("2012", "2016", "2020") ~ 1)
+         #, time = case_when(year %in% c("2016") ~ 0,
+         #                 year %in% c("2020") ~ 1),
+         ) %>% 
+  mutate(across(c(court_action_none_count, court_map_drawn_count, court_return_leg_count, court_challenge_rejected_count), 
+        ~case_when(. >= 1 ~ 1,
+                   . == 0 ~ 0),
+        .names = "{.col}_VAR")) %>% 
+  mutate(interaction_redistrict = time * redistrict_VAR,
+         interaction_court_action_none_count = time * court_action_none_count_VAR,
+         interaction_court_map_drawn_count = time * court_map_drawn_count_VAR,
+         interaction_court_return_leg_count = time * court_return_leg_count_VAR,
+         interaction_court_challenge_rejected_count = time * court_challenge_rejected_count_VAR,)
 
-### WITH polling data results
-dv <- c("log(democrat_county_vote_perc)", "log(republican_county_vote_perc)")
-iv <- "redistrict_count + time + interaction + log(polling_station) + log(vep_turnout_rate) + log(unemploymentRate) # + state_party_control
-"
+### WITH redistrict_VAR
+dv <- c("log(avg_DEMvote_perc)", "log(avg_REPvote_perc)")
+iv <- "redistrict_VAR + time + interaction_redistrict + log(vep_turnout_rate) + log(state_unemploymentRate)"
 dv_label <- c("DEM candidate's % of county votes (log)", "REP candidate's % of county votes (log)")
-cov_label <- c("Redistricting attempts per election cycle [state-level]", 
-               "T",
-               "Interaction (Redistrict x T)",
-               "Polling station per county (log)",
-               "Voting-Eligible-Population turnout rate (log) [state-level]", 
-               "Unemployment rate  (log) [county-level]"
+cov_label <- c("Contested Redistriction", 
+               "Time",
+               "Interaction (Redistrict x Time)",
+               #"Polling station per county (log)", [excluded due to singularity issues]
+               "Voting-Eligible-Population turnout rate (log)", 
+               "Unemployment rate  (log)"
                #, "State legislature control - DEM", 
                #"State legislature control - REP"
                )
@@ -262,58 +264,73 @@ f.reg.multi(dv.sav = dv, iv.sav = iv,
             dv_label.sav = dv_label, cov_label.sav = cov_label, 
             title.sav = ""
             , star.type = "html",
-            star.out = paste0("05. Visualizations/", today(), "-regression-tbl-polling-did2016.html")
+            star.out = paste0("05. Visualizations/", today(), "-regression-tbl-polling-did-redistrict.html")
             )
 
 # Check N & T
-summary(lm(as.formula(paste0(dv, "~", iv)),
+summary(plm(as.formula(paste0(dv, "~", iv)),
                         data = p.df
-                        #, effect = "time",
-                        #model = "within"
+                        , effect = "twoway",
+                        model = "within"
            ))
 
 
-
-### DID for pre-2020 and post-2020 [don't use]
-
-p.df <- df %>% 
-  pdata.frame(index = c("idkey", "year")) %>% 
-  mutate(democrat_county_vote_perc = democrat_county_vote / county_totalvotes,
-         republican_county_vote_perc = republican_county_vote / county_totalvotes,
-         poll_perc =  polling_station / laborForce,
-         state_party_control = factor(state_party_control, levels = c("Split", "Democratic", "Republican")),
-         time = case_when(year %in% c("2000", "2004", "2008", "2012", "2016") ~ 0,
-                          year %in% c("2020") ~ 1),
-         redistrict_count = case_when(redistrict_count == "1" | redistrict_count == "2" ~ 1,
-                                      is.na(redistrict_count) ~ 0),
-         interaction = time * redistrict_count)
-
-### WITH polling data results
-dv <- c("log(democrat_county_vote_perc)", "log(republican_county_vote_perc)")
-iv <- "redistrict_count + time + interaction + log(polling_station) + log(vep_turnout_rate) + log(unemploymentRate) + state_party_control"
+### WITH court_action_none_count
+dv <- c("log(avg_DEMvote_perc)", "log(avg_REPvote_perc)")
+iv <- "court_action_none_count + time + interaction_court_action_none_count + log(vep_turnout_rate) + log(state_unemploymentRate)"
 dv_label <- c("DEM candidate's % of county votes (log)", "REP candidate's % of county votes (log)")
-cov_label <- c("Redistricting attempts per election cycle [state-level]", 
-               "T",
-               "Interaction (Redistrict x T)",
-               "Polling station per county (log)",
-               "Voting-Eligible-Population turnout rate (log) [state-level]", 
-               "Unemployment rate  (log) [county-level]", 
-               "State legislature control - DEM", 
-               "State legislature control - REP")
+cov_label <- c("No Court Action", 
+               "Time",
+               "Interaction (Cort x Time)",
+               #"Polling station per county (log)", [excluded due to singularity issues]
+               "Voting-Eligible-Population turnout rate (log)", 
+               "Unemployment rate  (log)"
+               #, "State legislature control - DEM", 
+               #"State legislature control - REP"
+               )
 
 # Title = Effect of Redistricting on Party Choice in Presidential Elections
 f.reg.multi(dv.sav = dv, iv.sav = iv, 
             dv_label.sav = dv_label, cov_label.sav = cov_label, 
             title.sav = ""
             , star.type = "html",
-            star.out = paste0("05. Visualizations/", today(), "-regression-tbl-polling-did2020.html")
+            star.out = paste0("05. Visualizations/", today(), "-regression-tbl-polling-did-court-action.html")
             )
 
 # Check N & T
 summary(plm(as.formula(paste0(dv, "~", iv)),
-                        data = p.df,
-                        effect = "time",
-                        model = "within"))
+                        data = p.df
+                        , effect = "twoway",
+                        model = "within"
+           ))
 
-*/
+### WITH court_map_drawn_count
+dv <- c("log(avg_DEMvote_perc)", "log(avg_REPvote_perc)")
+iv <- "court_map_drawn_count + time + interaction_court_map_drawn_count + log(vep_turnout_rate) + log(state_unemploymentRate)"
+dv_label <- c("DEM candidate's % of county votes (log)", "REP candidate's % of county votes (log)")
+cov_label <- c("Court Drawn Map", 
+               "Time",
+               "Interaction (Cort x Time)",
+               #"Polling station per county (log)", [excluded due to singularity issues]
+               "Voting-Eligible-Population turnout rate (log)", 
+               "Unemployment rate  (log)"
+               #, "State legislature control - DEM", 
+               #"State legislature control - REP"
+               )
+
+# Title = Effect of Redistricting on Party Choice in Presidential Elections
+f.reg.multi(dv.sav = dv, iv.sav = iv, 
+            dv_label.sav = dv_label, cov_label.sav = cov_label, 
+            title.sav = ""
+            , star.type = "html",
+            star.out = paste0("05. Visualizations/", today(), "-regression-tbl-polling-did-court-draw.html")
+            )
+
+# Check N & T
+summary(plm(as.formula(paste0(dv, "~", iv)),
+                        data = p.df
+                        , effect = "twoway",
+                        model = "within"
+           ))
+
 ```
