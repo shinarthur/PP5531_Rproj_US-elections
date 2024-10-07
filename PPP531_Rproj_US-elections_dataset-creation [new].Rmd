@@ -13,6 +13,7 @@ library(here)
 library(tidyverse)
 library(stringi)
 library(usa)
+library(expss)
 
 ### Change directory here. 
 ### As long as file structure is same as github structure, directory does not need to be changed.
@@ -114,7 +115,7 @@ df_redist.temp3 <- df_redist.temp2 %>%
 ### Merge redistricting data with 
 base_redist_df <- left_join(base_df, df_redist.temp3,
           by = join_by("year" == "elect_year", "state_abv" == "state")) %>% 
-  mutate(across(starts_with("court_"), ~ coalesce(., 0))) %>% 
+  mutate(across(starts_with("court_"), ~ coalesce(as.numeric(.), 0))) %>% 
   mutate(redistrict_VAR = case_when(court_action_none_count > 0 | court_map_drawn_count > 0 | court_return_leg_count > 0 | court_challenge_rejected_count > 0 ~ 1,
                                    TRUE ~ 0)) %>% 
   relocate(redistrict_VAR, .before = court_action_none_count)
@@ -346,6 +347,31 @@ df_poll_state <- df_poll %>%
 
 ```
 
+```{r df_gdp}
+
+### Import state GDP
+### https://corgis-edu.github.io/corgis/csv/state_crime/
+IMPORT.gdp <- read_csv("02. Inputs/SAGDP1__ALL_AREAS_1997_2023.csv")
+
+### Preparing dataframe for merging
+df_gdp <- IMPORT.gdp %>% 
+  select(-`2021`, -`2022`, -`2023`) %>% 
+  # Harmonize FIPS code
+  mutate(GeoFIPS = substr(GeoFIPS, start = 1, stop = 2)) %>%
+  # Extract only Real GDP
+  filter(LineCode == 1) %>% 
+  select(GeoFIPS, `1997`:`2020`) %>% 
+  pivot_longer(cols = !1,
+               names_to = "year",
+               values_to = "gdp_state") %>% 
+  mutate(year = as.numeric(year))
+
+### Cleanwork space
+rm(list = grep("temp", ls(), value = TRUE))
+
+```
+
+
 # Merging Data
 Things to join:
 * df_housevote
@@ -357,14 +383,138 @@ Things to join:
 ```{r merge}
 
 ### Merge dataframes
-df_final <- base_redist_df %>% 
+df_merge <- base_redist_df %>% 
   left_join(df_housevote, by = join_by("year" == "year", "state_abv" == "state_po")) %>% 
   left_join(df_turnout %>% select(-state), by = join_by("year" == "year", "state_abv" == "state_abv")) %>% 
   left_join(df_poll_state, by = join_by("year" == "election_year", "state_abv" == "state")) %>% 
   left_join(df_unemp_state, by = join_by("year" == "year", "state_abv" == "state_abv")) %>% 
-  left_join(df_crime, by = join_by("year" == "year", "state_name" == "state"))
+  left_join(df_crime, by = join_by("year" == "year", "state_name" == "state")) %>% 
+  left_join(df_gdp, by = join_by("year" == "year", "fips" == "GeoFIPS"))
 
 ```
+
+```{r additional edits}
+
+### Add population density
+df_final.temp1 <- df_merge %>% 
+  mutate(vep_density = vep / area,
+         vap_density = vap / area)
+
+### Creating Binary Treatment Variables
+# Court action status in 2012 (Treatment variable)
+treatedVAR.2012.temp <- df_final.temp1 %>% 
+  mutate(year_num = as.numeric(year)) %>%
+  filter(year_num == 2012) %>% 
+  select(state_abv, redistrict_VAR, court_action_none_count, court_map_drawn_count, court_return_leg_count, court_challenge_rejected_count) %>% 
+  rename_all(~paste0(., "_VAR")) %>% 
+  mutate(judiciary_VAR = case_when(redistrict_VAR_VAR == 1 
+                                   & (court_map_drawn_count_VAR == 1 
+                                      | court_return_leg_count_VAR == 1 
+                                      | court_challenge_rejected_count_VAR == 1) ~ 1,
+                                   TRUE ~ 0))
+
+# Left join court action status in 2012 to 2012on-wawrds subsetted data
+treatedVAR.2012post.temp <- df_final.temp1 %>% 
+  mutate(year_num = as.numeric(year)) %>%
+  filter(year_num >= 2012) %>% 
+  left_join(treatedVAR.2012.temp, by = join_by("state_abv" == "state_abv_VAR"),
+            multiple = "all")
+
+# Subset of pre-2012 (no treatment)
+treatedVAR.2012pre.temp <- df_final.temp1 %>% 
+  mutate(year_num = as.numeric(year)) %>% 
+  filter(year_num < 2012)
+  
+# Bind Rows of pre-2012 & 2012-onwards
+df_final.temp2 <- bind_rows(treatedVAR.2012post.temp, treatedVAR.2012pre.temp) %>% 
+  arrange(state_abv, year_num) %>% 
+  # Change pre-2012 binary treatment variable to 0
+  mutate(across(redistrict_VAR_VAR:judiciary_VAR, ~case_when(is.na(.) ~ 0,
+                                                             . >= 1 ~ 1,
+                                                             TRUE ~ .)))
+
+```
+
+```{r apply labels}
+
+### Labelled data frame creation
+# List of variable names
+legend <- df_final.temp2 %>% 
+  colnames() %>% 
+  as.data.frame()
+
+### Assigning labels
+df_final.temp3 <- df_final.temp2 %>% 
+  expss::apply_labels(year = "Election Cycle",
+               state_name = "State Name",
+               state_abv = "State Abbreviation",
+               fips = "State's Federal Information Processing System (FIPS) code",
+               region = "State's census bureau region",
+               division = "State's census bureau division",
+               area = "Area in square miles",
+               lat = "Center latitudinal coordinate",
+               long = "Center longitudinal coordinate",
+               redistrict_VAR = "Binary variable of did redistricting occur in this election cycle?",
+               court_action_none_count = "No. of redistricting actions in an election cycle without court action/involvement",
+               court_map_drawn_count = "No. of redistricting actions in an election cycle, where the court drew the final map",
+               court_return_leg_count = "No. of redistricting actions in an election cycle, where the court asked the legislature to redraw the map",
+               court_challenge_rejected_count = "No. of redistricting actions in an election cycle, where the court rejected the challenge (map was fair)",
+               avg_DEMvote_perc = "Average % of votes cast to DEM candiates across counties",
+               avg_REPvote_perc = "Average % of votes cast to REP candiates across counties",
+               avg_OTHERvote_perc = "Average % of votes cast to non-DEM/REP candiates across counties",
+               state_totalvotes = "Total votes cast in a state",
+               vep_turnout_rate = "Voting Eligible Population (VEP) turnout rate",
+               vap_turnout_rate = "Voting Able Population (VAP) turnout rate",
+               vep = "Voting Eligible Population (VEP)",
+               vap = "Voting Able Population (VAP)",
+               statecrime.population = "No. of criminals in a state",
+               statecrime.rates.property.all = "State's crime rates (ALL property-related crimes)",
+               statecrime.rates.property.burglary = "State's crime rates (property: burglary crimes)",
+               statecrime.rates.property.larceny = "State's crime rates (property: larceny crimes)",
+               statecrime.rates.property.motor = "State's crime rates (property: motor crimes)",
+               statecrime.rates.violent.all = "State's crime rates (ALL violent crimes)",
+               statecrime.rates.violent.assault = "State's crime rates (violent: assault crimes)", 
+               statecrime.rates.violent.murder = "State's crime rates (violent: murder crimes)",
+               statecrime.rates.violent.rape = "State's crime rates (violent: rape crimes)",
+               statecrime.rates.violent.robbery = "State's crime rates (violent: robbery crimes)",
+               statecrime.totals.property.all = "State's no. of crimes (ALL property-related crimes)",
+               statecrime.totals.property.burglary = "State's no. of crimes (property: burglary crimes)",
+               statecrime.totals.property.larceny = "State's no. of crimes (property: larceny crimes)",
+               statecrime.totals.property.motor = "State's no. of crimes (property: motor crimes)",
+               statecrime.totals.violent.all = "State's no. of crimes (ALL violent crimes)",
+               statecrime.totals.violent.assault = "State's no. of crimes (violent: assault crimes)",
+               statecrime.totals.violent.murder = "State's no. of crimes (violent: murder crimes)",
+               statecrime.totals.violent.rape = "State's no. of crimes (violent: rape crimes)",
+               statecrime.totals.violent.robbery = "State's no. of crimes (violent: robbery crimes)",
+               polling_station = "Number of polling stations per state [Note: exists from 2012 - 2020 only]",
+               state_laborForce = "No. of people in state's laborforce",
+               state_employed = "No. of employed people in the state",
+               state_unemployed = "No. of employed people in the state",
+               state_unemploymentRate = "State's unemployment rate",
+               gdp_state = "State's real GDP",
+               vep_density = "Population density based on voting eligible population",
+               vap_density = "Population density based on voting able population",
+               year_num = "Election Cycle (numeric version)",
+               redistrict_VAR_VAR = "Merge check variable [ignore please]",
+               court_action_none_count_VAR = "Binary variable of was there a redistricting action during the 2012 election cycle, without court action/involvement?",
+               court_map_drawn_count_VAR = "Binary variable of was there a redistricting action during the 2012 election cycle, where the courts drew the final map?",
+               court_return_leg_count_VAR = "Binary variable of was there a redistricting action during the 2012 election cycle, where the court asked the legislature to redraw the map?",
+               court_challenge_rejected_count_VAR = "Binary variable of was there a redistricting action during the 2012 election cycle, where the court rejected the challenge (map was fair)",
+               judiciary_VAR = "Binary variable of was there redistricting action during the 2012 election cycle, with ANY court action/involvement?"
+               )
+
+
+### Assign to df_final
+df_final <- df_final.temp3
+
+legend <- sjlabelled::get_label(df_final) %>%
+  as.data.frame() %>% 
+  rownames_to_column(var = "variable") %>% 
+  rename("label" = ".")
+
+
+```
+
 
 ```{r export}
 ### Save dataset
@@ -377,7 +527,7 @@ saveRDS(df_final, file = paste0("04. Outputs/", today(), "_electiondataset.rds")
 ```{r additional edits}
 rm(list=ls())
 
-df <- read_rds("04. Outputs/2024-10-03_electiondataset.rds")
+df <- read_rds("04. Outputs/2024-10-07_electiondataset.rds")
 
 ```
 
