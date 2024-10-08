@@ -37,10 +37,10 @@ knitr::opts_knit$set(root.dir = here::here())
 rm(list=ls())
 
 ### Import data created in dataset-creation.rmd
-df <- read_rds("04. Outputs/2024-10-07_electiondataset.rds")
+df <- read_rds("04. Outputs/2024-10-08_electiondataset.rds")
 
 ### Legend of variables (variable name x explanation of each variable)
-legend <- sjlabelled::get_label(df) %>%
+legend_df <- sjlabelled::get_label(df) %>%
   as.data.frame() %>% 
   rownames_to_column(var = "variable") %>% 
   rename("label" = ".")
@@ -53,7 +53,7 @@ df_nolabel <- labelled::remove_labels(df)
 
 ```{r data-check}
 
-temp.variable_list <- c("court_action_none_count_VAR", "court_map_drawn_count_VAR", "court_return_leg_count_VAR", "court_challenge_rejected_count_VAR", "judiciary_VAR")
+temp.variable_list <- c("court_action_none_count_VAR", "court_map_drawn_count_VAR", "court_return_leg_count_VAR", "court_challenge_rejected_count_VAR", "judiciary_VAR", "judiciary_unfair_map_VAR", "judiciary_fair_map_VAR")
 temp.year_expression_list <- list(expr(year_num == 2012), expr(year_num >= 2012), expr(TRUE))
 
 for(year.sel in temp.year_expression_list){
@@ -70,6 +70,9 @@ for(year.sel in temp.year_expression_list){
   }
 }
 
+### Cleanwork space
+rm(list = grep("temp", ls(), value = TRUE))
+
 ```
 
 
@@ -84,6 +87,7 @@ f.reg.multi <- function(dv.sav = dv,
                         type.sav = "within", 
                         dv_label.sav = NULL, 
                         cov_label.sav = NULL,
+                        index.sav = NULL,
                         star.type = ifelse(knitr::is_latex_output(),"latex", "text"),
                         star.out = NULL) {
   templist <- list()
@@ -94,10 +98,11 @@ f.reg.multi <- function(dv.sav = dv,
     
     formula_str <- paste0(val, "~", iv.sav)
     
-    templist[[i]] <- lm(as.formula(paste(formula_str, collapse = " ")),
+    templist[[i]] <- plm(as.formula(paste(formula_str, collapse = " ")),
                         data = dataframe.sav
-                        #, effect = effect.sav, 
-                        #model = type.sav
+                        , effect = effect.sav,
+                        model = type.sav
+                        , index = index.sav
                         )
   }
     
@@ -265,15 +270,25 @@ f.reg.single(dv.sav = dv, iv.sav = iv, ctrl.sav = ctrl, title = dv)
 ### Panel Data Frame for DID
 p.df <- df %>% 
   filter(avg_DEMvote_perc > 0.0001 & avg_REPvote_perc > 0.0001) %>% 
+  # filter(year_num >= 2004 & year_num <= 2016) %>% 
   mutate(time = case_when(year %in% c("2000", "2004", "2008") ~ 0,
                           year %in% c("2012", "2016", "2020") ~ 1)) %>% 
+  mutate(stateparty_control = fct_relevel(stateparty_control, "SPLIT", "DEM", "REP")) %>% 
   mutate(interaction_judiciary = time * judiciary_VAR,
          interaction_court_action_none_count = time * court_action_none_count_VAR,
          interaction_court_map_drawn_count = time * court_map_drawn_count_VAR,
          interaction_court_return_leg_count = time * court_return_leg_count_VAR,
-         interaction_court_challenge_rejected_count = time * court_challenge_rejected_count_VAR) %>% 
+         interaction_court_challenge_rejected_count = time * court_challenge_rejected_count_VAR,
+         interaction_judiciary_unfair = time * judiciary_unfair_map_VAR,
+         interaction_judiciary_fair = time * judiciary_fair_map_VAR
+         ) %>% 
   pdata.frame(index = c("state_abv", "year")) 
 
+### Legend of variables (variable name x explanation of each variable)
+legend_p.df <- sjlabelled::get_label(p.df) %>%
+  as.data.frame() %>% 
+  rownames_to_column(var = "variable") %>% 
+  rename("label" = ".")
 
 # Data-check for DID
 table(p.df$time)
@@ -413,3 +428,94 @@ summary(plm(as.formula(paste0(dv, "~", iv)),
            ))
 
 ```
+
+# Arthur Testing Ground
+
+Notes:
+* Must exclude crime rate (2020 values do not exist, resulting in an unbalanced panel)
+* Narrowing down to 2004 to 2016 does not improve findings (still null and negative adjusted R2)
+* Having state-fixed effect with plm() and then manually adding year controls gives differing adjusted R2 values, why? Latter being much higher R2 & adjusted R2
+
+Treatments with findings!
+* Did the judiciary find the map to be fair?
+* Was there judicial involvement of any kind after redistricting?
+
+```{r arthur testing ground}
+
+### Judiciary involvement (fair map) in redistricting (time and state fixed effects)
+dv <- c("avg_DEMvote_perc", "avg_REPvote_perc", "log(vep_turnout_rate)")
+dv_label <- c("DEM candidate's % of county votes (log)", "REP candidate's % of county votes (log)", "Voting-Eligible-Population turnout rate (log)")
+
+iv <- "interaction_judiciary_fair + log(vep_density) + log(violent_crime) + log(state_unemploymentRate) + stateparty_control + as.factor(year)"
+
+# Using time and state fixed effect (twoways) under PLM
+f.reg.multi(dv.sav = dv, iv.sav = iv, 
+            dv_label.sav = dv_label, cov_label.sav = NULL, 
+            title.sav = "",
+            effect.sav = "twoways",
+            type.sav = "within"
+            , star.type = "html",
+            star.out = paste0("05. Visualizations/", today(), "/reg-tbl-did-judicial_fair (twoway).html")
+            )
+
+# Using state fixed effect (individual) under PLM, but manually adding time control variables
+f.reg.multi(dv.sav = dv, iv.sav = iv, 
+            dv_label.sav = dv_label, cov_label.sav = NULL, 
+            title.sav = "",
+            effect.sav = "individual",
+            type.sav = "within"
+            , star.type = "html",
+            star.out = paste0("05. Visualizations/", today(), "/reg-tbl-did-judicial_fair (manual).html")
+            )
+
+
+################################################################################
+### Judiciary involvement (unfair map) in redistricting (time and state fixed effects)
+iv <- "interaction_judiciary_unfair + log(vep_density) + log(violent_crime) + log(state_unemploymentRate) + stateparty_control + as.factor(year)"
+
+# Using time and state fixed effect (twoways) under PLM
+f.reg.multi(dv.sav = dv, iv.sav = iv, 
+            dv_label.sav = dv_label, cov_label.sav = NULL, 
+            title.sav = "",
+            effect.sav = "twoways",
+            type.sav = "within"
+            , star.type = "html",
+            star.out = paste0("05. Visualizations/", today(), "/reg-tbl-did-judicial_unfair (twoway).html")
+            )
+
+# Using state fixed effect (individual) under PLM, but manually adding time control variables
+f.reg.multi(dv.sav = dv, iv.sav = iv, 
+            dv_label.sav = dv_label, cov_label.sav = NULL, 
+            title.sav = "",
+            effect.sav = "individual",
+            type.sav = "within"
+            , star.type = "html",
+            star.out = paste0("05. Visualizations/", today(), "/reg-tbl-did-judicial_unfair (manual).html")
+            )
+
+################################################################################
+### Judiciary involvement (ANY) in redistricting (time and state fixed effects)
+iv <- "interaction_judiciary + log(vep_density) + log(violent_crime) + log(state_unemploymentRate) + stateparty_control + as.factor(year)"
+
+# Using time and state fixed effect (twoways) under PLM
+f.reg.multi(dv.sav = dv, iv.sav = iv, 
+            dv_label.sav = dv_label, cov_label.sav = NULL, 
+            title.sav = "",
+            effect.sav = "twoways",
+            type.sav = "within"
+            , star.type = "html",
+            star.out = paste0("05. Visualizations/", today(), "/reg-tbl-did-judicial_ANY (twoway).html")
+            )
+
+# Using state fixed effect (individual) under PLM, but manually adding time control variables
+f.reg.multi(dv.sav = dv, iv.sav = iv, 
+            dv_label.sav = dv_label, cov_label.sav = NULL, 
+            title.sav = "",
+            effect.sav = "individual",
+            type.sav = "within"
+            , star.type = "html",
+            star.out = paste0("05. Visualizations/", today(), "/reg-tbl-did-judicial_ANY (manual).html")
+            )
+
+```
+

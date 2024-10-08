@@ -1,0 +1,56 @@
+
+<table style="text-align:center"><tr><td colspan="4" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left"></td><td colspan="3"><em>Dependent variable:</em></td></tr>
+<tr><td></td><td colspan="3" style="border-bottom: 1px solid black"></td></tr>
+<tr><td style="text-align:left"></td><td colspan="3"></td></tr>
+<tr><td style="text-align:left"></td><td>DEM candidate's % of county votes (log)</td><td>REP candidate's % of county votes (log)</td><td>Voting-Eligible-Population turnout rate (log)</td></tr>
+<tr><td style="text-align:left"></td><td>(1)</td><td>(2)</td><td>(3)</td></tr>
+<tr><td colspan="4" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">interaction_judiciary_fair</td><td>-0.038<sup>*</sup></td><td>0.029<sup>*</sup></td><td>0.029<sup>***</sup></td></tr>
+<tr><td style="text-align:left"></td><td>(0.020)</td><td>(0.017)</td><td>(0.010)</td></tr>
+<tr><td style="text-align:left"></td><td>p = 0.063</td><td>p = 0.089</td><td>p = 0.006</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">log(vep_density)</td><td>0.281<sup>**</sup></td><td>-0.395<sup>***</sup></td><td>0.337<sup>***</sup></td></tr>
+<tr><td style="text-align:left"></td><td>(0.120)</td><td>(0.099)</td><td>(0.060)</td></tr>
+<tr><td style="text-align:left"></td><td>p = 0.020</td><td>p = 0.0001</td><td>p = 0.00000</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">log(violent_crime)</td><td>-0.032</td><td>0.041</td><td>-0.012</td></tr>
+<tr><td style="text-align:left"></td><td>(0.034)</td><td>(0.028)</td><td>(0.017)</td></tr>
+<tr><td style="text-align:left"></td><td>p = 0.342</td><td>p = 0.143</td><td>p = 0.479</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">log(state_unemploymentRate)</td><td>0.022</td><td>-0.030</td><td>0.065<sup>***</sup></td></tr>
+<tr><td style="text-align:left"></td><td>(0.032)</td><td>(0.026)</td><td>(0.016)</td></tr>
+<tr><td style="text-align:left"></td><td>p = 0.489</td><td>p = 0.257</td><td>p = 0.00005</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">stateparty_controlDEM</td><td>0.063<sup>***</sup></td><td>-0.049<sup>***</sup></td><td>-0.009</td></tr>
+<tr><td style="text-align:left"></td><td>(0.018)</td><td>(0.015)</td><td>(0.009)</td></tr>
+<tr><td style="text-align:left"></td><td>p = 0.0005</td><td>p = 0.001</td><td>p = 0.317</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">stateparty_controlREP</td><td>-0.004</td><td>0.001</td><td>0.014</td></tr>
+<tr><td style="text-align:left"></td><td>(0.017)</td><td>(0.014)</td><td>(0.009)</td></tr>
+<tr><td style="text-align:left"></td><td>p = 0.803</td><td>p = 0.966</td><td>p = 0.116</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">as.factor(year)2004</td><td>-0.011</td><td>0.035<sup>**</sup></td><td>0.066<sup>***</sup></td></tr>
+<tr><td style="text-align:left"></td><td>(0.019)</td><td>(0.015)</td><td>(0.010)</td></tr>
+<tr><td style="text-align:left"></td><td>p = 0.550</td><td>p = 0.023</td><td>p = 0.000</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">as.factor(year)2008</td><td>0.053<sup>**</sup></td><td>-0.029</td><td>0.071<sup>***</sup></td></tr>
+<tr><td style="text-align:left"></td><td>(0.022)</td><td>(0.018)</td><td>(0.012)</td></tr>
+<tr><td style="text-align:left"></td><td>p = 0.016</td><td>p = 0.102</td><td>p = 0.000</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">as.factor(year)2012</td><td>-0.019</td><td>0.059<sup>**</sup></td><td>-0.033<sup>*</sup></td></tr>
+<tr><td style="text-align:left"></td><td>(0.032)</td><td>(0.027)</td><td>(0.017)</td></tr>
+<tr><td style="text-align:left"></td><td>p = 0.551</td><td>p = 0.029</td><td>p = 0.051</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">as.factor(year)2016</td><td>-0.037</td><td>0.067<sup>***</sup></td><td>0.001</td></tr>
+<tr><td style="text-align:left"></td><td>(0.028)</td><td>(0.023)</td><td>(0.015)</td></tr>
+<tr><td style="text-align:left"></td><td>p = 0.189</td><td>p = 0.005</td><td>p = 0.946</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">as.factor(year)2020</td><td>-0.028</td><td>0.092<sup>***</sup></td><td>0.053<sup>***</sup></td></tr>
+<tr><td style="text-align:left"></td><td>(0.037)</td><td>(0.030)</td><td>(0.019)</td></tr>
+<tr><td style="text-align:left"></td><td>p = 0.442</td><td>p = 0.003</td><td>p = 0.006</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td><td></td></tr>
+<tr><td colspan="4" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">Observations</td><td>286</td><td>286</td><td>267</td></tr>
+<tr><td style="text-align:left">R<sup>2</sup></td><td>0.279</td><td>0.336</td><td>0.724</td></tr>
+<tr><td style="text-align:left">Adjusted R<sup>2</sup></td><td>0.091</td><td>0.163</td><td>0.646</td></tr>
+<tr><td style="text-align:left">F Statistic</td><td>7.964<sup>***</sup> (df = 11; 226)</td><td>10.391<sup>***</sup> (df = 11; 226)</td><td>49.443<sup>***</sup> (df = 11; 207)</td></tr>
+<tr><td colspan="4" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left"><em>Note:</em></td><td colspan="3" style="text-align:right"><sup>*</sup>p<0.1; <sup>**</sup>p<0.05; <sup>***</sup>p<0.01</td></tr>
+</table>
