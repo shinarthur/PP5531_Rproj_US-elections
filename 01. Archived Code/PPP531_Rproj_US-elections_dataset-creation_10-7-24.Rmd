@@ -194,69 +194,27 @@ df_turnout <- IMPORT.turnout %>%
 
 ```{r df_crime}
 
-# ### Import state crime rate
-# ### https://corgis-edu.github.io/corgis/csv/state_crime/
-# IMPORT.crime <- read_csv("02. Inputs/state_crime.csv")
-# 
-# ### Preparing dataframe for merging
-# df_crime <- IMPORT.crime %>% 
-#   # Renaming column names to lowercase (for easier merge)
-#   rename_all(tolower) %>% 
-#   # Renaming column names to "crime" for easier indexing
-#   rename_with(~ gsub("data","statecrime",.), contains("data"))
-# 
-# # Extract statenames from df_crime and df_base to check if names are identical
-# df_crime_statename.temp <- df_crime %>% select(state) %>% distinct() %>% arrange() %>% mutate(x = 1)
-# df_base_statename.temp <- base_df %>% select(state_name) %>% distinct() %>% arrange() %>% mutate(y = 1)
-# full_join(df_crime_statename.temp, df_base_statename.temp, by = join_by("state" == "state_name")) %>% 
-#   filter(is.na(x) | is.na(y))
-# 
-# ### Cleanwork space
-# rm(list = grep("temp", ls(), value = TRUE))
+### Import state crime rate
+### https://corgis-edu.github.io/corgis/csv/state_crime/
+IMPORT.crime <- read_csv("02. Inputs/state_crime.csv")
+
+### Preparing dataframe for merging
+df_crime <- IMPORT.crime %>% 
+  # Renaming column names to lowercase (for easier merge)
+  rename_all(tolower) %>% 
+  # Renaming column names to "crime" for easier indexing
+  rename_with(~ gsub("data","statecrime",.), contains("data"))
+
+# Extract statenames from df_crime and df_base to check if names are identical
+df_crime_statename.temp <- df_crime %>% select(state) %>% distinct() %>% arrange() %>% mutate(x = 1)
+df_base_statename.temp <- base_df %>% select(state_name) %>% distinct() %>% arrange() %>% mutate(y = 1)
+full_join(df_crime_statename.temp, df_base_statename.temp, by = join_by("state" == "state_name")) %>% 
+  filter(is.na(x) | is.na(y))
+
+### Cleanwork space
+rm(list = grep("temp", ls(), value = TRUE))
 
 ```
-
-```{r df_fbi_crime}
-
-### Source violent offenses reported by state:
-### https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/explorer/crime/crime-trend
-
-### Row binding all annual county unemployment data from 1997 to 2003
-
-# Collate files' paths
-# fbi_crime_files.temp1 <- list.files(path = "02. Inputs/violent crimes FBI", full.names = TRUE, recursive = TRUE)
-# 
-# # Prepare empty data frame to catch
-# df_fbi_crime.temp1 <- data.frame(matrix(ncol = 253, nrow = 0))
-# 
-# # Loop each file into fbi_crime_files.temp1
-# for (file in fbi_crime_files.temp1) {
-#   # Read xslx file
-#   file_data <- read_csv(file)
-#   # Rbind
-#   df_fbi_crime.temp1 <- rbind(df_fbi_crime.temp1, file_data)
-# }
-# 
-# # Save df_fbi_crime.temp1 as an intermediary file
-# saveRDS(df_fbi_crime.temp1, file = paste0("03. Intermediaries/df_fbi_crime.rds"))
-
-# Reimport df_poll
-df_fbi_crime.temp1 <- read_rds("03. Intermediaries/df_fbi_crime.rds")
-
-### 
-df_fbi_crime <- df_fbi_crime.temp1 %>% 
-  filter(!grepl("Clearances", series)) %>% 
-  rename(state = series) %>% 
-  pivot_longer(cols = !1,
-               names_to = "date",
-               values_to = "violent_crime_month") %>% 
-  mutate(year = as.numeric(str_sub(date, start = -4, end = -1))) %>% 
-  relocate(year, .after = state) %>% 
-  group_by(year, state) %>% 
-  summarize(violent_crime = sum(violent_crime_month), .groups = "drop")
-
-```
-
 
 
 
@@ -392,7 +350,7 @@ df_poll_state <- df_poll %>%
 ```{r df_gdp}
 
 ### Import state GDP
-### https://www.bea.gov/data/gdp/gdp-state 
+### https://corgis-edu.github.io/corgis/csv/state_crime/
 IMPORT.gdp <- read_csv("02. Inputs/SAGDP1__ALL_AREAS_1997_2023.csv")
 
 ### Preparing dataframe for merging
@@ -413,41 +371,6 @@ rm(list = grep("temp", ls(), value = TRUE))
 
 ```
 
-```{r df_stateparty}
-
-### Import state partisan composition (state controlled by which party?)
-### https://github.com/psthomas/state-partisan-composition
-### (originally from https://www.ncsl.org/research/about-state-legislatures/partisan-composition.aspx)
-IMPORT.stateparty <- read_csv("02. Inputs/state_partisan_composition_1934_2021.csv")
-
-### Preparing dataframe for merging
-df_stateparty <- IMPORT.stateparty %>%
-  # Filter out any NA values (that are not represented as NA)
-  filter(!house_total == 0) %>% 
-  filter(!senate_total == 0) %>% 
-  # Identify which party has control over state senate
-  mutate(senate_party = case_when(senate_dem/senate_total >= 0.5 ~ "DEM",
-                                  senate_rep/senate_total >= 0.5 ~ "REP",
-                                  is.na(senate_total) | is.na(senate_dem) | is.na(senate_rep) ~ NA,
-                                  TRUE ~ "SPLIT")) %>%
-  relocate(senate_party, .before = senate_total) %>%
-  # Identify which party has control over state house of representatives
-  mutate(house_party = case_when(house_dem/house_total >= 0.5 ~ "DEM",
-                                  house_rep/house_total >= 0.5 ~ "REP",
-                                  is.na(house_total) | is.na(house_dem) | is.na(house_rep) ~ NA,
-                                  TRUE ~ "SPLIT")) %>%
-  relocate(house_party, .before = house_total) %>%
-  # Identify state legislative control - do they control both senate and house?)
-  mutate(stateparty_control = case_when(house_party == senate_party ~ house_party,
-                                        !house_party == senate_party ~ "SPLIT",
-                                        is.na(house_party) | is.na(senate_party) ~ NA,
-                                        TRUE ~ NA)) %>%
-  select(year, state, stateparty_control) %>% 
-  # Change to factor
-  mutate(stateparty_control = as.factor(stateparty_control))
-
-```
-
 
 # Merging Data
 Things to join:
@@ -455,7 +378,7 @@ Things to join:
 * df_turnout
 * df_poll_state
 * df_unemp_state
-* df_crime [replaced with fbi crime, due to lack of 2020 data]
+* df_crime
 
 ```{r merge}
 
@@ -465,10 +388,8 @@ df_merge <- base_redist_df %>%
   left_join(df_turnout %>% select(-state), by = join_by("year" == "year", "state_abv" == "state_abv")) %>% 
   left_join(df_poll_state, by = join_by("year" == "election_year", "state_abv" == "state")) %>% 
   left_join(df_unemp_state, by = join_by("year" == "year", "state_abv" == "state_abv")) %>% 
-  # left_join(df_crime, by = join_by("year" == "year", "state_name" == "state")) %>% 
-  left_join(df_fbi_crime, by = join_by("year" == "year", "state_name" == "state")) %>% 
-  left_join(df_gdp, by = join_by("year" == "year", "fips" == "GeoFIPS")) %>% 
-  left_join(df_stateparty, by = join_by("year" == "year", "state_name" == "state"))
+  left_join(df_crime, by = join_by("year" == "year", "state_name" == "state")) %>% 
+  left_join(df_gdp, by = join_by("year" == "year", "fips" == "GeoFIPS"))
 
 ```
 
@@ -481,50 +402,36 @@ df_final.temp1 <- df_merge %>%
 
 ### Creating Binary Treatment Variables
 # Court action status in 2012 (Treatment variable)
-treatedVAR.2012.temp <- df_final.temp1 %>%
+treatedVAR.2012.temp <- df_final.temp1 %>% 
   mutate(year_num = as.numeric(year)) %>%
-  filter(year_num == 2012) %>%
-  select(state_abv, redistrict_VAR, court_action_none_count, court_map_drawn_count, court_return_leg_count, court_challenge_rejected_count) %>%
-  rename_all(~paste0(., "_VAR")) %>%
-  mutate(judiciary_VAR = case_when(redistrict_VAR_VAR == 1
-                                   & (court_map_drawn_count_VAR == 1
-                                       | court_return_leg_count_VAR == 1
-                                       | court_challenge_rejected_count_VAR == 1) ~ 1,
-                                   TRUE ~ 0),
-         judiciary_unfair_map_VAR = case_when(redistrict_VAR_VAR == 1
-                                              & (court_map_drawn_count_VAR == 1
-                                                 | court_return_leg_count_VAR == 1) ~ 1,
-                                              TRUE ~ 0),
-         judiciary_fair_map_VAR = case_when(redistrict_VAR_VAR == 1
-                                              & court_challenge_rejected_count_VAR == 1 ~ 1,
-                                              TRUE ~ 0)
-         )
+  filter(year_num == 2012) %>% 
+  select(state_abv, redistrict_VAR, court_action_none_count, court_map_drawn_count, court_return_leg_count, court_challenge_rejected_count) %>% 
+  rename_all(~paste0(., "_VAR")) %>% 
+  mutate(judiciary_VAR = case_when(redistrict_VAR_VAR == 1 
+                                   & (court_map_drawn_count_VAR == 1 
+                                      | court_return_leg_count_VAR == 1 
+                                      | court_challenge_rejected_count_VAR == 1) ~ 1,
+                                   TRUE ~ 0))
 
-# Left join court action status to all years 
-df_final.temp2 <- df_final.temp1 %>% 
-  mutate(year_num = as.numeric(year)) %>% 
+# Left join court action status in 2012 to 2012on-wawrds subsetted data
+treatedVAR.2012post.temp <- df_final.temp1 %>% 
+  mutate(year_num = as.numeric(year)) %>%
+  filter(year_num >= 2012) %>% 
   left_join(treatedVAR.2012.temp, by = join_by("state_abv" == "state_abv_VAR"),
-             multiple = "all")
+            multiple = "all")
 
-# # Left join court action status in 2012 to 2012on-wawrds subsetted data
-# treatedVAR.2012post.temp <- df_final.temp1 %>% 
-#   mutate(year_num = as.numeric(year)) %>%
-#   #filter(year_num >= 2012) %>% 
-#   left_join(treatedVAR.2012.temp, by = join_by("state_abv" == "state_abv_VAR"),
-#             multiple = "all")
-# 
-# # Subset of pre-2012 (no treatment)
-# treatedVAR.2012pre.temp <- df_final.temp1 %>% 
-#   mutate(year_num = as.numeric(year)) %>% 
-#   filter(year_num < 2012)
+# Subset of pre-2012 (no treatment)
+treatedVAR.2012pre.temp <- df_final.temp1 %>% 
+  mutate(year_num = as.numeric(year)) %>% 
+  filter(year_num < 2012)
   
-# # Bind Rows of pre-2012 & 2012-onwards
-# df_final.temp2 <- bind_rows(treatedVAR.2012post.temp, treatedVAR.2012pre.temp) # %>% 
-#   arrange(state_abv, year_num) %>% 
-#   # Change pre-2012 binary treatment variable to 0
-#   mutate(across(redistrict_VAR_VAR:judiciary_VAR, ~case_when(is.na(.) ~ 0,
-#                                                              . >= 1 ~ 1,
-#                                                              TRUE ~ .)))
+# Bind Rows of pre-2012 & 2012-onwards
+df_final.temp2 <- bind_rows(treatedVAR.2012post.temp, treatedVAR.2012pre.temp) %>% 
+  arrange(state_abv, year_num) %>% 
+  # Change pre-2012 binary treatment variable to 0
+  mutate(across(redistrict_VAR_VAR:judiciary_VAR, ~case_when(is.na(.) ~ 0,
+                                                             . >= 1 ~ 1,
+                                                             TRUE ~ .)))
 
 ```
 
@@ -560,33 +467,31 @@ df_final.temp3 <- df_final.temp2 %>%
                vap_turnout_rate = "Voting Able Population (VAP) turnout rate",
                vep = "Voting Eligible Population (VEP)",
                vap = "Voting Able Population (VAP)",
-               violent_crime = "No. of violent crimes reported in a state",
-               # statecrime.population = "No. of criminals in a state",
-               # statecrime.rates.property.all = "State's crime rates (ALL property-related crimes)",
-               # statecrime.rates.property.burglary = "State's crime rates (property: burglary crimes)",
-               # statecrime.rates.property.larceny = "State's crime rates (property: larceny crimes)",
-               # statecrime.rates.property.motor = "State's crime rates (property: motor crimes)",
-               # statecrime.rates.violent.all = "State's crime rates (ALL violent crimes)",
-               # statecrime.rates.violent.assault = "State's crime rates (violent: assault crimes)", 
-               # statecrime.rates.violent.murder = "State's crime rates (violent: murder crimes)",
-               # statecrime.rates.violent.rape = "State's crime rates (violent: rape crimes)",
-               # statecrime.rates.violent.robbery = "State's crime rates (violent: robbery crimes)",
-               # statecrime.totals.property.all = "State's no. of crimes (ALL property-related crimes)",
-               # statecrime.totals.property.burglary = "State's no. of crimes (property: burglary crimes)",
-               # statecrime.totals.property.larceny = "State's no. of crimes (property: larceny crimes)",
-               # statecrime.totals.property.motor = "State's no. of crimes (property: motor crimes)",
-               # statecrime.totals.violent.all = "State's no. of crimes (ALL violent crimes)",
-               # statecrime.totals.violent.assault = "State's no. of crimes (violent: assault crimes)",
-               # statecrime.totals.violent.murder = "State's no. of crimes (violent: murder crimes)",
-               # statecrime.totals.violent.rape = "State's no. of crimes (violent: rape crimes)",
-               # statecrime.totals.violent.robbery = "State's no. of crimes (violent: robbery crimes)",
+               statecrime.population = "No. of criminals in a state",
+               statecrime.rates.property.all = "State's crime rates (ALL property-related crimes)",
+               statecrime.rates.property.burglary = "State's crime rates (property: burglary crimes)",
+               statecrime.rates.property.larceny = "State's crime rates (property: larceny crimes)",
+               statecrime.rates.property.motor = "State's crime rates (property: motor crimes)",
+               statecrime.rates.violent.all = "State's crime rates (ALL violent crimes)",
+               statecrime.rates.violent.assault = "State's crime rates (violent: assault crimes)", 
+               statecrime.rates.violent.murder = "State's crime rates (violent: murder crimes)",
+               statecrime.rates.violent.rape = "State's crime rates (violent: rape crimes)",
+               statecrime.rates.violent.robbery = "State's crime rates (violent: robbery crimes)",
+               statecrime.totals.property.all = "State's no. of crimes (ALL property-related crimes)",
+               statecrime.totals.property.burglary = "State's no. of crimes (property: burglary crimes)",
+               statecrime.totals.property.larceny = "State's no. of crimes (property: larceny crimes)",
+               statecrime.totals.property.motor = "State's no. of crimes (property: motor crimes)",
+               statecrime.totals.violent.all = "State's no. of crimes (ALL violent crimes)",
+               statecrime.totals.violent.assault = "State's no. of crimes (violent: assault crimes)",
+               statecrime.totals.violent.murder = "State's no. of crimes (violent: murder crimes)",
+               statecrime.totals.violent.rape = "State's no. of crimes (violent: rape crimes)",
+               statecrime.totals.violent.robbery = "State's no. of crimes (violent: robbery crimes)",
                polling_station = "Number of polling stations per state [Note: exists from 2012 - 2020 only]",
                state_laborForce = "No. of people in state's laborforce",
                state_employed = "No. of employed people in the state",
                state_unemployed = "No. of employed people in the state",
                state_unemploymentRate = "State's unemployment rate",
                gdp_state = "State's real GDP",
-               stateparty_control = "Partisan control over state's legislature (controlling both state house and senate)",
                vep_density = "Population density based on voting eligible population",
                vap_density = "Population density based on voting able population",
                year_num = "Election Cycle (numeric version)",
@@ -595,9 +500,7 @@ df_final.temp3 <- df_final.temp2 %>%
                court_map_drawn_count_VAR = "Binary variable of was there a redistricting action during the 2012 election cycle, where the courts drew the final map?",
                court_return_leg_count_VAR = "Binary variable of was there a redistricting action during the 2012 election cycle, where the court asked the legislature to redraw the map?",
                court_challenge_rejected_count_VAR = "Binary variable of was there a redistricting action during the 2012 election cycle, where the court rejected the challenge (map was fair)",
-               judiciary_VAR = "Binary variable of was there redistricting action during the 2012 election cycle, with ANY court action/involvement?",
-               judiciary_unfair_map_VAR = "Binary variable of was there redistricting action during the 2012 election cycle, with court action/involvement that found the map was unfair (needed to be redrawn)?",
-               judiciary_fair_map_VAR = "Binary variable of was there redistricting action during the 2012 election cycle, with court action/involvement that found the map was fair (unchanged map)?"
+               judiciary_VAR = "Binary variable of was there redistricting action during the 2012 election cycle, with ANY court action/involvement?"
                )
 
 
@@ -624,7 +527,7 @@ saveRDS(df_final, file = paste0("04. Outputs/", today(), "_electiondataset.rds")
 ```{r additional edits}
 rm(list=ls())
 
-df <- read_rds("04. Outputs/2024-10-08_electiondataset.rds")
+df <- read_rds("04. Outputs/2024-10-07_electiondataset.rds")
 
 ```
 
