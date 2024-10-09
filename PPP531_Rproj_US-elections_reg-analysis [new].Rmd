@@ -37,7 +37,7 @@ knitr::opts_knit$set(root.dir = here::here())
 rm(list=ls())
 
 ### Import data created in dataset-creation.rmd
-df <- read_rds("04. Outputs/2024-10-08_electiondataset.rds")
+df <- read_rds("04. Outputs/2024-10-09_electiondataset.rds")
 
 ### Legend of variables (variable name x explanation of each variable)
 legend_df <- sjlabelled::get_label(df) %>%
@@ -162,39 +162,48 @@ table(p.df$judiciary_VAR[p.df$time == 1])
 table(p.df$judiciary_VAR[p.df$time == 0])
 table(p.df$interaction_judiciary)
 
+# Manipulate Controls here
+iv_control <- "log(vep_density) + log(state_unemploymentRate) + stateparty_control + log(lagged_vep) + log(vote_closeness)"
+
+
 ```
 
 ```{r}
 ### WITH judiciary_VAR
 dv <- c("avg_DEMvote_perc", "avg_REPvote_perc", "log(vep_turnout_rate)")
-iv <- "judiciary_VAR + time + interaction_judiciary + log(vep_turnout_rate) + log(state_unemploymentRate) + log(gdp_state)"
+iv_main <- "interaction_judiciary"
+iv <- paste0(iv_main, " + ", iv_control)
+
 dv_label <- c("DEM candidate's % of county votes (log)", "REP candidate's % of county votes (log)", "Voting-Eligible-Population turnout rate (log)")
-cov_label <- c("Treatment/Control Group (1/0) - Any Judiciary Action Taken", 
-               "Time Period After/Before (1/0)",
-               "Interaction (Judicial x Time)",
-               "Voting-Eligible-Population turnout rate (log)", 
-               "Unemployment rate  (log)",
-               "GDP (log)"
-               #, "State legislature control - DEM", 
-               #"State legislature control - REP"
-               )
+# cov_label <- c("Treatment/Control Group (1/0) - Any Judiciary Action Taken", 
+#                "Time Period After/Before (1/0)",
+#                "Interaction (Judicial x Time)",
+#                "Voting-Eligible-Population turnout rate (log)", 
+#                "Unemployment rate  (log)",
+#                "GDP (log)"
+#                #, "State legislature control - DEM", 
+#                #"State legislature control - REP"
+#                )
 
 # Title = Effect of Redistricting on Party Choice in Presidential Elections
 f.reg.multi(dv.sav = dv, iv.sav = iv, 
-            dv_label.sav = dv_label, cov_label.sav = cov_label, 
-            title.sav = ""
+            dv_label.sav = dv_label, 
+            title.sav = "",
+            effect.sav = "twoways",
+            type.sav = "within"
             , star.type = "html",
             star.out = paste0("05. Visualizations/", today(), "-regression-tbl-polling-did-judicial.html")
             )
 
 # Check N & T
-summary(plm(as.formula(paste0(dv, "~", iv)),
+summary(plm(as.formula(paste0(dv[3], "~", iv)),
                         data = p.df
+                        , index = c("state_abv", "year")
                         , effect = "twoway",
                         model = "within"
            ))
 
-summary(lm(as.formula(paste0(dv[2], "~", iv)),
+summary(lm(as.formula(paste0(dv[3], "~", iv)),
                       data = p.df
            ))
 
@@ -203,24 +212,27 @@ summary(lm(as.formula(paste0(dv[2], "~", iv)),
 ```{r}
 ### WITH court_map_drawn_count
 dv <- c("avg_DEMvote_perc", "avg_REPvote_perc", "log(vep_turnout_rate)")
-iv <- "court_map_drawn_count_VAR + time + interaction_court_map_drawn_count + log(vep_turnout_rate) + log(state_unemploymentRate) + log(gdp_state)"
+iv_main <- "interaction_court_map_drawn_count"
+iv <- paste0(iv_main, " + ", iv_control)
 dv_label <- c("DEM candidate's % of county votes (log)", "REP candidate's % of county votes (log)", "Voting-Eligible-Population turnout rate (log)")
-cov_label <- c("Treatment/Control Group (1/0) - Map Drawn by Court", 
-               "Time Period After/Before (1/0)",
-               "Interaction (Judicial x Time)",
-               "Voting-Eligible-Population turnout rate (log)", 
-               "Unemployment rate  (log)",
-               "GDP (log)"
-               #, "State legislature control - DEM", 
-               #"State legislature control - REP"
-               )
+# cov_label <- c("Treatment/Control Group (1/0) - Map Drawn by Court", 
+#                "Time Period After/Before (1/0)",
+#                "Interaction (Judicial x Time)",
+#                "Voting-Eligible-Population turnout rate (log)", 
+#                "Unemployment rate  (log)",
+#                "GDP (log)"
+#                #, "State legislature control - DEM", 
+#                #"State legislature control - REP"
+#                )
 
 # Title = Effect of Redistricting on Party Choice in Presidential Elections
 f.reg.multi(dv.sav = dv, iv.sav = iv, 
-            dv_label.sav = dv_label, cov_label.sav = cov_label, 
-            title.sav = ""
+            dv_label.sav = dv_label, 
+            title.sav = "",
+            effect.sav = "twoways",
+            type.sav = "within"
             , star.type = "html",
-            star.out = paste0("05. Visualizations/", today(), "-regression-tbl-polling-did-court-draw.html")
+            star.out = paste0("05. Visualizations/", today(), "-regression-tbl-polling-did-map-draw.html")
             )
 
 # Check N & T
@@ -234,22 +246,25 @@ summary(plm(as.formula(paste0(dv, "~", iv)),
 ```{r}
 ### WITH court_return_leg_count
 dv <- c("avg_DEMvote_perc", "avg_REPvote_perc", "log(vep_turnout_rate)")
-iv <- "court_return_leg_count_VAR + time + interaction_court_return_leg_count + log(vep_turnout_rate) + log(state_unemploymentRate) + log(gdp_state)"
+iv_main <- "interaction_court_return_leg_count"
+iv <- paste0(iv_main, " + ", iv_control)
 dv_label <- c("DEM candidate's % of county votes (log)", "REP candidate's % of county votes (log)", "Voting-Eligible-Population turnout rate (log)")
-cov_label <- c("Treatment/Control Group (1/0) - Map Drawn by Court", 
-               "Time Period After/Before (1/0)",
-               "Interaction (Judicial x Time)",
-               "Voting-Eligible-Population turnout rate (log)", 
-               "Unemployment rate  (log)",
-               "GDP (log)"
-               #, "State legislature control - DEM", 
-               #"State legislature control - REP"
-               )
+# cov_label <- c("Treatment/Control Group (1/0) - Map Drawn by Court", 
+#                "Time Period After/Before (1/0)",
+#                "Interaction (Judicial x Time)",
+#                "Voting-Eligible-Population turnout rate (log)", 
+#                "Unemployment rate  (log)",
+#                "GDP (log)"
+#                #, "State legislature control - DEM", 
+#                #"State legislature control - REP"
+#                )
 
 # Title = Effect of Redistricting on Party Choice in Presidential Elections
 f.reg.multi(dv.sav = dv, iv.sav = iv, 
-            dv_label.sav = dv_label, cov_label.sav = cov_label, 
-            title.sav = ""
+            dv_label.sav = dv_label, 
+            title.sav = "",
+            effect.sav = "twoways",
+            type.sav = "within"
             , star.type = "html",
             star.out = paste0("05. Visualizations/", today(), "-regression-tbl-polling-did-court-return-leg.html")
             )
@@ -265,22 +280,25 @@ summary(plm(as.formula(paste0(dv, "~", iv)),
 ```{r}
 ### WITH court_challenge_rejected_count
 dv <- c("avg_DEMvote_perc", "avg_REPvote_perc", "log(vep_turnout_rate)")
-iv <- "court_challenge_rejected_count_VAR + time + interaction_court_challenge_rejected_count + log(vep_turnout_rate) + log(state_unemploymentRate) + log(gdp_state)"
+iv_main <- "interaction_court_challenge_rejected_count"
+iv <- paste0(iv_main, " + ", iv_control)
 dv_label <- c("DEM candidate's % of county votes (log)", "REP candidate's % of county votes (log)", "Voting-Eligible-Population turnout rate (log)")
-cov_label <- c("Treatment/Control Group (1/0) - Map Drawn by Court", 
-               "Time Period After/Before (1/0)",
-               "Interaction (Judicial x Time)",
-               "Voting-Eligible-Population turnout rate (log)", 
-               "Unemployment rate  (log)",
-               "GDP (log)"
-               #, "State legislature control - DEM", 
-               #"State legislature control - REP"
-               )
+# cov_label <- c("Treatment/Control Group (1/0) - Map Drawn by Court", 
+#                "Time Period After/Before (1/0)",
+#                "Interaction (Judicial x Time)",
+#                "Voting-Eligible-Population turnout rate (log)", 
+#                "Unemployment rate  (log)",
+#                "GDP (log)"
+#                #, "State legislature control - DEM", 
+#                #"State legislature control - REP"
+#                )
 
 # Title = Effect of Redistricting on Party Choice in Presidential Elections
 f.reg.multi(dv.sav = dv, iv.sav = iv, 
-            dv_label.sav = dv_label, cov_label.sav = cov_label, 
-            title.sav = ""
+            dv_label.sav = dv_label, 
+            title.sav = "",
+            effect.sav = "twoways",
+            type.sav = "within"
             , star.type = "html",
             star.out = paste0("05. Visualizations/", today(), "-regression-tbl-polling-did-court-reject.html")
             )
@@ -292,6 +310,73 @@ summary(plm(as.formula(paste0(dv, "~", iv)),
                         model = "within"
            ))
 
+```
+```{r}
+### WITH judicial_fair
+dv <- c("avg_DEMvote_perc", "avg_REPvote_perc", "log(vep_turnout_rate)")
+iv_main <- "interaction_judiciary_fair"
+iv <- paste0(iv_main, " + ", iv_control)
+dv_label <- c("DEM candidate's % of county votes (log)", "REP candidate's % of county votes (log)", "Voting-Eligible-Population turnout rate (log)")
+# cov_label <- c("Treatment/Control Group (1/0) - Map Drawn by Court", 
+#                "Time Period After/Before (1/0)",
+#                "Interaction (Judicial x Time)",
+#                "Voting-Eligible-Population turnout rate (log)", 
+#                "Unemployment rate  (log)",
+#                "GDP (log)"
+#                #, "State legislature control - DEM", 
+#                #"State legislature control - REP"
+#                )
+
+# Title = Effect of Redistricting on Party Choice in Presidential Elections
+f.reg.multi(dv.sav = dv, iv.sav = iv, 
+            dv_label.sav = dv_label, 
+            title.sav = "",
+            effect.sav = "twoways",
+            type.sav = "within"
+            , star.type = "html",
+            star.out = paste0("05. Visualizations/", today(), "-regression-tbl-polling-did-judicial-fair.html")
+            )
+
+# Check N & T
+summary(plm(as.formula(paste0(dv, "~", iv)),
+                        data = p.df
+                        , effect = "twoway",
+                        model = "within"
+           ))
+```
+
+```{r}
+### WITH judicial_unfair
+dv <- c("avg_DEMvote_perc", "avg_REPvote_perc", "log(vep_turnout_rate)")
+iv_main <- "interaction_judiciary_unfair"
+iv <- paste0(iv_main, " + ", iv_control)
+dv_label <- c("DEM candidate's % of county votes (log)", "REP candidate's % of county votes (log)", "Voting-Eligible-Population turnout rate (log)")
+# cov_label <- c("Treatment/Control Group (1/0) - Map Drawn by Court", 
+#                "Time Period After/Before (1/0)",
+#                "Interaction (Judicial x Time)",
+#                "Voting-Eligible-Population turnout rate (log)", 
+#                "Unemployment rate  (log)",
+#                "GDP (log)"
+#                #, "State legislature control - DEM", 
+#                #"State legislature control - REP"
+#                )
+
+# Title = Effect of Redistricting on Party Choice in Presidential Elections
+f.reg.multi(dv.sav = dv, iv.sav = iv, 
+            dv_label.sav = dv_label, 
+            title.sav = "",
+            effect.sav = "twoways",
+            type.sav = "within"
+            , star.type = "html",
+            star.out = paste0("05. Visualizations/", today(), "-regression-tbl-polling-did-judicial-unfair.html")
+            )
+
+# Check N & T
+summary(plm(as.formula(paste0(dv, "~", iv)),
+                        data = p.df
+                        , effect = "twoway",
+                        model = "within"
+           ))
 ```
 
 # Arthur Testing Ground
