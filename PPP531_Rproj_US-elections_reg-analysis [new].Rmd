@@ -125,6 +125,53 @@ f.reg.multi <- function(dv.sav = dv,
   
 }
 
+f.reg.multi.iv <- function(dv.sav = dv, 
+                        iv.sav = iv, 
+                        ctrl.sav = ctrl,
+                        dataframe.sav = p.df, 
+                        title.sav = "testingasdf", 
+                        effect.sav = "time",
+                        type.sav = "within", 
+                        dv_label.sav = NULL, 
+                        cov_label.sav = NULL,
+                        index.sav = NULL,
+                        star.type = ifelse(knitr::is_latex_output(),"latex", "text"),
+                        star.out = NULL) {
+  templist <- list()
+  
+  for (i in 1:length(iv.sav)){
+  
+    val <- iv.sav[[i]]
+    
+    formula_str <- paste0(dv.sav, "~", val, "+", ctrl.sav)
+    
+    templist[[i]] <- plm(as.formula(paste(formula_str, collapse = " ")),
+                        data = dataframe.sav
+                        , effect = effect.sav,
+                        model = type.sav
+                        , index = index.sav
+                        )
+  }
+    
+  stargazer(templist,
+          type = star.type,
+          out = star.out,
+          report = "vc*sp",
+          title = "asdf",
+          dep.var.labels = paste0(title.sav),
+          dep.var.labels.include = T,
+          # column.sep.width = "0pt",
+          float = FALSE,
+          header = FALSE,
+          # no.space = TRUE,
+          font.size = "small",
+          column.labels = dv_label.sav,
+          covariate.labels = cov_label.sav
+          ) %>%
+    return()
+  
+}
+
 ```
 
 
@@ -468,4 +515,23 @@ f.reg.multi(dv.sav = dv, iv.sav = iv,
             )
 
 ```
+
+```{r multi IV testing}
+dv <- "log(vep_turnout_rate)"
+iv <- c("interaction_judiciary", "interaction_court_action_none_count", "interaction_judiciary_unfair", "interaction_court_challenge_rejected_count", "interaction_judiciary_fair")
+ctrl <- "log(vep_density) + log(state_unemploymentRate) + stateparty_control + log(lagged_vep) + log(vote_closeness)"
+
+f.reg.multi.iv(dv.sav = dv, 
+               iv.sav = iv, 
+               ctrl.sav = ctrl,
+               dataframe.sav = p.df, 
+               title.sav = "testingasdf", 
+               effect.sav = "twoways",
+               type.sav = "within", 
+               dv_label.sav = NULL, cov_label.sav = NULL,
+               star.type = ifelse(knitr::is_latex_output(),"latex", "text"),
+               star.out = NULL)
+
+```
+
 
