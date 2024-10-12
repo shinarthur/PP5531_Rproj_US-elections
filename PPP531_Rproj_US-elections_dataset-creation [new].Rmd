@@ -14,6 +14,7 @@ library(tidyverse)
 library(stringi)
 library(usa)
 library(expss)
+library(tidycensus)
 
 ### Change directory here. 
 ### As long as file structure is same as github structure, directory does not need to be changed.
@@ -167,7 +168,17 @@ df_housevote.temp2 <- df_housevote.temp1 %>%
             avg_OTHERvote_perc = mean(OTHER_perc, na.rm = T),
             state_totalvotes = sum(totalvotes, na.rm = T))
 
-df_housevote <- df_housevote.temp2
+# Create variable for ex ante/lagged closeness of votes (taking the difference of vote counts between top 1 and top 2 candidate) ~ smaller gap = closer race
+df_housevote <- df_housevote.temp2 %>% 
+  mutate(first = pmax(avg_DEMvote_perc, avg_REPvote_perc, avg_OTHERvote_perc),
+         runner = 1 - pmax(avg_DEMvote_perc, avg_REPvote_perc, avg_OTHERvote_perc) - pmin(avg_DEMvote_perc, avg_REPvote_perc, avg_OTHERvote_perc),
+         vote_closeness = first - runner) %>% 
+  select(-first, -runner) %>% 
+  # introduce lag
+  ungroup() %>% 
+  filter(state_po != "DC") %>% 
+  group_by(state_po) %>% 
+  mutate(lagged_vote_closeness = c(rep(NA, 2), head(vote_closeness, -2)))
 
 ### Cleanwork space
 rm(list = grep("temp", ls(), value = TRUE))
@@ -188,7 +199,9 @@ df_turnout <- IMPORT.turnout %>%
   # Removing columns unrelated to voter turnout rate
   select(1:3, VEP_TURNOUT_RATE, VAP_TURNOUT_RATE, VEP, VAP) %>% 
   # Renaming column names to lowercase (for easier merge)
-  rename_all(tolower)
+  rename_all(tolower) %>% 
+  # Add lagged variable
+  mutate(lagged_vep = c(vep_turnout_rate[(3:length(vep_turnout_rate))], NA, NA), .by = state_abv)
 
 ```
 
@@ -256,9 +269,6 @@ df_fbi_crime <- df_fbi_crime.temp1 %>%
   summarize(violent_crime = sum(violent_crime_month), .groups = "drop")
 
 ```
-
-
-
 
 ```{r df_unemp, results='hide', message=FALSE}
 ### Source county unemployment rate from the following link:
@@ -413,6 +423,21 @@ rm(list = grep("temp", ls(), value = TRUE))
 
 ```
 
+```{r df_wealth_inequality}
+
+### Import state-level wealth inequality 
+### https://www.openicpsr.org/openicpsr/project/192306/version/V4/view?path=/openicpsr/192306/fcr:versions/V4&type=project
+IMPORT.wealth_ineq <- read_csv("02. Inputs/wealth inequality/state_wealth_inequality.csv")
+
+### Preparing dataframe for merging
+df_wealth_inequality <- IMPORT.wealth_ineq %>%
+  mutate(state = str_to_sentence(state)) %>% 
+  mutate(state = case_when(state == "District of columbia" ~ "District of Columbia",
+                           TRUE ~ state)) %>% 
+  select(year, state, wealth_gini, income_mean)
+
+```
+
 ```{r df_stateparty}
 
 ### Import state partisan composition (state controlled by which party?)
@@ -465,9 +490,9 @@ df_merge <- base_redist_df %>%
   left_join(df_turnout %>% select(-state), by = join_by("year" == "year", "state_abv" == "state_abv")) %>% 
   left_join(df_poll_state, by = join_by("year" == "election_year", "state_abv" == "state")) %>% 
   left_join(df_unemp_state, by = join_by("year" == "year", "state_abv" == "state_abv")) %>% 
-  # left_join(df_crime, by = join_by("year" == "year", "state_name" == "state")) %>% 
   left_join(df_fbi_crime, by = join_by("year" == "year", "state_name" == "state")) %>% 
   left_join(df_gdp, by = join_by("year" == "year", "fips" == "GeoFIPS")) %>% 
+  left_join(df_wealth_inequality, by = join_by("year" == "year", "state_name" == "state")) %>% 
   left_join(df_stateparty, by = join_by("year" == "year", "state_name" == "state"))
 
 ```
@@ -506,26 +531,6 @@ df_final.temp2 <- df_final.temp1 %>%
   left_join(treatedVAR.2012.temp, by = join_by("state_abv" == "state_abv_VAR"),
              multiple = "all")
 
-# # Left join court action status in 2012 to 2012on-wawrds subsetted data
-# treatedVAR.2012post.temp <- df_final.temp1 %>% 
-#   mutate(year_num = as.numeric(year)) %>%
-#   #filter(year_num >= 2012) %>% 
-#   left_join(treatedVAR.2012.temp, by = join_by("state_abv" == "state_abv_VAR"),
-#             multiple = "all")
-# 
-# # Subset of pre-2012 (no treatment)
-# treatedVAR.2012pre.temp <- df_final.temp1 %>% 
-#   mutate(year_num = as.numeric(year)) %>% 
-#   filter(year_num < 2012)
-  
-# # Bind Rows of pre-2012 & 2012-onwards
-# df_final.temp2 <- bind_rows(treatedVAR.2012post.temp, treatedVAR.2012pre.temp) # %>% 
-#   arrange(state_abv, year_num) %>% 
-#   # Change pre-2012 binary treatment variable to 0
-#   mutate(across(redistrict_VAR_VAR:judiciary_VAR, ~case_when(is.na(.) ~ 0,
-#                                                              . >= 1 ~ 1,
-#                                                              TRUE ~ .)))
-
 ```
 
 ```{r apply labels}
@@ -560,32 +565,18 @@ df_final.temp3 <- df_final.temp2 %>%
                vap_turnout_rate = "Voting Able Population (VAP) turnout rate",
                vep = "Voting Eligible Population (VEP)",
                vap = "Voting Able Population (VAP)",
+               lagged_vep = "Lagged Voting Eligible Population (VEP) turnout rate",
+               vote_closeness = "Ex post voting gap using the partisan differences of average % of votes cast across counties",
+               lagged_vote_closeness = "Lagged voting gap using the partisan differences of average % of votes cast across counties",
                violent_crime = "No. of violent crimes reported in a state",
-               # statecrime.population = "No. of criminals in a state",
-               # statecrime.rates.property.all = "State's crime rates (ALL property-related crimes)",
-               # statecrime.rates.property.burglary = "State's crime rates (property: burglary crimes)",
-               # statecrime.rates.property.larceny = "State's crime rates (property: larceny crimes)",
-               # statecrime.rates.property.motor = "State's crime rates (property: motor crimes)",
-               # statecrime.rates.violent.all = "State's crime rates (ALL violent crimes)",
-               # statecrime.rates.violent.assault = "State's crime rates (violent: assault crimes)", 
-               # statecrime.rates.violent.murder = "State's crime rates (violent: murder crimes)",
-               # statecrime.rates.violent.rape = "State's crime rates (violent: rape crimes)",
-               # statecrime.rates.violent.robbery = "State's crime rates (violent: robbery crimes)",
-               # statecrime.totals.property.all = "State's no. of crimes (ALL property-related crimes)",
-               # statecrime.totals.property.burglary = "State's no. of crimes (property: burglary crimes)",
-               # statecrime.totals.property.larceny = "State's no. of crimes (property: larceny crimes)",
-               # statecrime.totals.property.motor = "State's no. of crimes (property: motor crimes)",
-               # statecrime.totals.violent.all = "State's no. of crimes (ALL violent crimes)",
-               # statecrime.totals.violent.assault = "State's no. of crimes (violent: assault crimes)",
-               # statecrime.totals.violent.murder = "State's no. of crimes (violent: murder crimes)",
-               # statecrime.totals.violent.rape = "State's no. of crimes (violent: rape crimes)",
-               # statecrime.totals.violent.robbery = "State's no. of crimes (violent: robbery crimes)",
                polling_station = "Number of polling stations per state [Note: exists from 2012 - 2020 only]",
                state_laborForce = "No. of people in state's laborforce",
                state_employed = "No. of employed people in the state",
                state_unemployed = "No. of employed people in the state",
                state_unemploymentRate = "State's unemployment rate",
                gdp_state = "State's real GDP",
+               wealth_gini = "State-level GINI coefficient (measure of income inequality)",
+               income_mean = "State-level average total household income",
                stateparty_control = "Partisan control over state's legislature (controlling both state house and senate)",
                vep_density = "Population density based on voting eligible population",
                vap_density = "Population density based on voting able population",
@@ -624,7 +615,19 @@ saveRDS(df_final, file = paste0("04. Outputs/", today(), "_electiondataset.rds")
 ```{r additional edits}
 rm(list=ls())
 
-df <- read_rds("04. Outputs/2024-10-08_electiondataset.rds")
+df <- read_rds("04. Outputs/2024-10-09_electiondataset.rds")
 
 ```
 
+# Playing with TidyCensus
+```{r}
+pop <- data.frame()
+
+
+pop <- get_flows(
+  geography = "state",
+  year = 2021
+)
+
+
+```
