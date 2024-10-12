@@ -6,7 +6,7 @@ library(maps)
 library(RColorBrewer)
 library(usmap)
 
-df <- read_rds("04. Outputs/2024-10-07_electiondataset.rds")
+df <- read_rds("/Users/moritzludwig/Documents/GitHub/PP531_Rproj_US-elections/04. Outputs/2024-10-09_electiondataset.rds")
 
 # Filter data for 2012 and ensure state_abv is character type
 df_2012 <- df %>%
@@ -21,9 +21,9 @@ df_2012 <- df_2012 %>%
   mutate(court_combined_VAR = case_when(
     court_challenge_rejected_count_VAR > 0 ~ "Challenge Rejected",
     court_return_leg_count_VAR > 0 ~ "Returned to Legislature",
-    court_map_drawn_count_VAR > 0 ~ "Map Drawn",
-    court_action_none_count_VAR > 0 ~ "No Action",
-    TRUE ~ "None"
+    court_map_drawn_count_VAR > 0 ~ "Map Drawn by Court",
+    court_action_none_count_VAR > 0 ~ "No Court Action",
+    TRUE ~ "No Redistricting"
   ))
 
 # Map state abbreviations to full state names for usmap
@@ -40,9 +40,9 @@ df_2012 <- df_2012 %>%
 color_palette <- brewer.pal(n = 5, name = "YlOrRd")
 category_colors <- c("Challenge Rejected" = color_palette[5],  # Deep Red
                      "Returned to Legislature" = color_palette[4],  # Orange-Red
-                     "Map Drawn" = color_palette[3],  # Orange
-                     "No Action" = color_palette[2],  # Light Orange-Yellow
-                     "None" = "#FFFFFF")  # White for None
+                     "Map Drawn by Court" = color_palette[3],  # Orange
+                     "No Court Action" = color_palette[2],  # Light Orange-Yellow
+                     "No Redistricting" = "#FFFFFF")  # White for None
 
 # Plot using usmap (now with full state names)
 plot_usmap(data = df_2012, values = "court_combined_VAR", regions = "states") +
