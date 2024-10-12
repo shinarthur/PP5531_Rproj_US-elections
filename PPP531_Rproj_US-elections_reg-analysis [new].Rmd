@@ -23,6 +23,8 @@ library(stargazer)
 library(readxl)
 library(labelled)
 library(sjlabelled)
+library(broom)
+library(GGally)
 
 ### Change directory here. 
 ### As long as file structure is same as github structure, directory does not need to be changed.
@@ -136,7 +138,8 @@ f.reg.multi.iv <- function(dv.sav = dv,
                         cov_label.sav = NULL,
                         index.sav = NULL,
                         star.type = ifelse(knitr::is_latex_output(),"latex", "text"),
-                        star.out = NULL) {
+                        star.out = NULL,
+                        out.sav = boolean()) {
   templist <- list()
   
   for (i in 1:length(iv.sav)){
@@ -151,6 +154,10 @@ f.reg.multi.iv <- function(dv.sav = dv,
                         model = type.sav
                         , index = index.sav
                         )
+  } 
+  
+  if (out.sav == T) {
+    return(templist)
   }
     
   stargazer(templist,
@@ -531,6 +538,35 @@ f.reg.multi.iv(dv.sav = dv,
                dv_label.sav = NULL, cov_label.sav = NULL,
                star.type = ifelse(knitr::is_latex_output(),"latex", "text"),
                star.out = NULL)
+
+outputs <- list()
+
+outputs <- f.reg.multi.iv(dv.sav = dv, 
+               iv.sav = iv, 
+               ctrl.sav = ctrl,
+               dataframe.sav = p.df, 
+               title.sav = "testingasdf", 
+               effect.sav = "twoways",
+               type.sav = "within", 
+               dv_label.sav = NULL, cov_label.sav = NULL,
+               star.type = ifelse(knitr::is_latex_output(),"latex", "text"),
+               star.out = NULL,
+               out.sav = T)
+
+# out.df <- data.frame()
+# 
+# for (i in 1:length(outputs)){
+#   temp <- outputs[[i]] %>%
+#     tidy() %>% 
+#     mutate(model = i)
+#   out.df <- rbind(out.df, temp)
+# }
+
+ggcoef(outputs[[4]], 
+       conf.int = T, 
+       conf.level = 0.90,
+       exclude_intercept = T
+       )
 
 ```
 
