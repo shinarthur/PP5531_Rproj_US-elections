@@ -5,20 +5,28 @@ date: "2024-09-10"
 output: html_document
 ---
 
-# Tasks To-Do
-
--    Nice graph about voter turn out rate over time (?)
-
--   
-
 # Setup
 ```{r setup}
 
+# basic R packages
 library(here)
 library(tidyverse)
-library(ggplot2)
 library(readr)
 library(dplyr)
+
+# ggplot packages
+library(ggplot2)
+library(RColorBrewer)
+library(ggthemes)
+library(hrbrthemes)
+library(viridis)
+library(showtext)
+sysfonts::font_add_google("Roboto Condensed")
+showtext_auto()
+
+# geospatial packages
+library(maps)
+library(usmap)
 
 ### Change directory here. 
 ### As long as file structure is same as github structure, directory does not need to be changed.
@@ -30,20 +38,153 @@ knitr::opts_knit$set(root.dir = here::here())
 ```{r import data}
 rm(list=ls())
 
-df <- read_rds("04. Outputs/2024-09-24_electiondataset.rds")
-### alternative: data <- read_csv("2024-09-24_electiondataset.csv")
+### Import election dataset
+df <- read_rds("04. Outputs/2024-10-09_electiondataset.rds")
 
 legend <- df %>% 
   colnames() %>% 
   as.data.frame()
+
+### Import factiva search data
+IMPORT.factiva <- read.csv("04. Outputs/FactivaGerrymandering.csv", header = FALSE, stringsAsFactors = FALSE)
+
+df_factiva <- IMPORT.factiva %>%
+  filter(grepl("Start Date", V1)) %>%
+  mutate(Year = as.numeric(gsub(".*(\\d{4}).*", "\\1", V1)),  # Extract the start year
+         Document_Count = as.numeric(V2)) %>% # Convert document count to numeric %>% 
+  filter(!is.na(Year), !is.na(Document_Count)) # Remove rows with missing data (if any)
   
 ```
 
-# Visualization Section
-```{r viz}
+# Formatting Presets
+```{r custom presets & function}
+
+format <- theme_ipsum_rc(base_size = 30)+
+      theme(plot.title = element_text(size = 50, lineheight = 0.55),
+        plot.subtitle = element_text(size = 30, color = "#939198"),
+        axis.title.x = element_text(size = 30, hjust = 0.5),
+        axis.title.y = element_text(size = 30, hjust = 0.5),
+        axis.text = element_text(lineheight = 0.8),
+        legend.position = "none",
+        panel.grid.major.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        plot.caption = element_text(size = 30, hjust=0)
+        # axis.text.x = element_blank(),
+        # panel.background = element_blank()
+        )
+
+f.ggsave <- function(name = "asdf", width.sav = 16, height.sav = 9, dpi.sav = 150, output.type = "png"){
+  filepath <- paste0("05. Visualizations/", name, "_", today(), ".", output.type)
+  ggsave(filepath, width = width.sav, height = height.sav, units = "in", dpi = dpi.sav)
+  # print(filepath)
+}
+
+# f.ggsave(name = "FactivaViz",
+#          width.sav = 16,
+#          height.sav = 9)
 
 ```
 
+
+# Visualization Section
+
+## Factiva Search
+```{r factiva viz}
+
+# Create the bar chart with the YlOrRd color palette
+df_factiva %>% 
+  ggplot(aes(x = Year, y = Document_Count)) +
+  geom_bar(stat = "identity", fill = brewer.pal(9, "YlOrRd")[5]) +  # Use a specific shade from YlOrRd
+  labs(title = "Trend in Articles Mentioning 'Gerrymandering'", 
+       x = "\nYear", 
+       y = "Number of Articles\n",
+       subtitle = "Source: Factiva search") +
+  scale_y_continuous(labels = scales::comma_format()) +
+  format
+
+f.ggsave(name = "FactivaViz",
+         width.sav = 12,
+         height.sav = 8,
+         output.type = "jpg")
+
+```
+## Geospatial
+```{r geospatial viz}
+
+### Preparing data
+# Filter data for 2012 and ensure state_abv is character type
+df_2012 <- df %>%
+  filter(year == 2012) %>%
+  mutate(state_abv = as.character(state_abv)) %>%
+  select(state_abv, court_action_none_count_VAR, 
+         court_map_drawn_count_VAR, court_return_leg_count_VAR, 
+         court_challenge_rejected_count_VAR)
+
+# Create a new column that categorizes states based on court action
+df_2012 <- df_2012 %>%
+  mutate(court_combined_VAR = case_when(
+    court_challenge_rejected_count_VAR > 0 ~ "Court finding: Constitutional map  ",
+    court_return_leg_count_VAR > 0 ~ "Court finding: Unconstitutional map  ",
+    court_map_drawn_count_VAR > 0 ~ "Court finding: Unconstitutional map  ",
+    court_action_none_count_VAR > 0 ~ "Redistricting with no court invovlement  ",
+    TRUE ~ "No redistricting  "
+  )) %>% 
+  mutate(court_combined_VAR = factor(court_combined_VAR, 
+                                     levels = c("No redistricting  ", 
+                                               "Redistricting with no court invovlement  ",
+                                               "Court finding: Constitutional map  ",
+                                               "Court finding: Unconstitutional map  "
+                                               )))
+
+
+# Map state abbreviations to full state names for usmap
+state_abbreviations <- data.frame(
+  state_abv = c(state.abb, "DC"),
+  state = c(state.name, "District of Columbia")
+)
+
+# Join the full state names to the data
+df_2012 <- df_2012 %>%
+  left_join(state_abbreviations, by = "state_abv")
+
+
+### Define a color palette using RColorBrewer (YlOrRd)
+color_palette <- brewer.pal(n = 5, name = "YlOrRd")
+category_colors <- c("Court finding: Unconstitutional map  " = color_palette[5],  # Deep Red
+                     # "Returned to Legislature" = color_palette[4],  # Orange-Red
+                     "Court finding: Constitutional map  " = color_palette[3],  # Orange
+                     "Redistricting with no court invovlement  " = color_palette[2],  # Light Orange-Yellow
+                     "No redistricting  " = "white")  # White for None
+
+category_colors <- c("Court finding: Unconstitutional map  " = "#FF687F",
+                     "Court finding: Constitutional map  " = "#005E8A",
+                     "Redistricting with no court invovlement  " = "#FFB188",
+                     "No redistricting  " = "#D3D4D6")
+
+### Plot using usmap (now with full state names)
+plot_usmap(data = df_2012, values = "court_combined_VAR", regions = "states", color =) +
+  scale_fill_manual(values = category_colors, name = "Type of Court Action") +
+  labs(title = "\nTypes of Court Involvement in State Redistricting \nDuring the 2012 Election Cycle",
+       subtitle = "\n" ) +
+  theme(legend.position = "top",  # Move the legend to the bottom
+        plot.title = element_text(hjust = 0.5, size = 50, family = "Roboto Condensed", face = "bold", lineheight = 0.55),  # Center the title
+        # legend.title = element_text(size = 12, family = "Roboto Condensed", face = "bold"),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 20, family = "Roboto Condensed"),
+        legend.key.size = unit(0.5, "cm"))
+  # guides(fill = guide_legend(
+  #   title.position = "top",  # Place the legend title above the categories
+  #   title.hjust = 0.5,  # Center the legend title
+  #   nrow = 1  # Place categories in a single row
+  # ))
+
+f.ggsave(name = "MapViz", width.sav = 12, height.sav = 8, 
+         output.type = "jpg")
+
+```
+
+```{r}
 # Replace NA values in redistrict_count with 0 and clean
 X2024_09_24_electiondataset$redistrict_count[is.na(X2024_09_24_electiondataset$redistrict_count)] <- 0
 cleaned_data <- X2024_09_24_electiondataset %>%
@@ -87,3 +228,5 @@ ggplot(cleaned_data_selected_states, aes(x = as.factor(redistrict_count), y = ve
        x = "Redistrict Count", 
        y = "VEP Turnout Rate") +
   theme_minimal()
+```
+
