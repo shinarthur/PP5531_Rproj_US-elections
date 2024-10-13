@@ -28,6 +28,11 @@ showtext_auto()
 library(maps)
 library(usmap)
 
+# regression / coefplot packages
+library(plm)
+library(broom)
+library(dotwhisker)
+
 ### Change directory here. 
 ### As long as file structure is same as github structure, directory does not need to be changed.
 knitr::opts_knit$set(root.dir = here::here())
@@ -53,6 +58,9 @@ df_factiva <- IMPORT.factiva %>%
   mutate(Year = as.numeric(gsub(".*(\\d{4}).*", "\\1", V1)),  # Extract the start year
          Document_Count = as.numeric(V2)) %>% # Convert document count to numeric %>% 
   filter(!is.na(Year), !is.na(Document_Count)) # Remove rows with missing data (if any)
+
+### Import regression p dataframe
+p.df <- read_rds("04. Outputs/2024-10-13_regressionDF.rds")
   
 ```
 
@@ -64,7 +72,7 @@ format <- theme_ipsum_rc(base_size = 30)+
         plot.subtitle = element_text(size = 30, color = "#939198"),
         axis.title.x = element_text(size = 30, hjust = 0.5),
         axis.title.y = element_text(size = 30, hjust = 0.5),
-        axis.text = element_text(lineheight = 0.8),
+        axis.text = element_text(lineheight = 0.55),
         legend.position = "none",
         panel.grid.major.y = element_blank(),
         panel.grid.major.x = element_blank(),
@@ -74,15 +82,32 @@ format <- theme_ipsum_rc(base_size = 30)+
         # panel.background = element_blank()
         )
 
+format2 <- theme_ipsum_rc(base_size = 30)+
+      theme(plot.title = element_text(size = 50, lineheight = 0.55, hjust = 0.5),
+        plot.subtitle = element_text(size = 30, color = "#939198", hjust = 0.5),
+        axis.title.x = element_text(size = 30, hjust = 0.5),
+        axis.title.y = element_text(size = 30, hjust = 0.5),
+        axis.text = element_text(lineheight = 0.55),
+        plot.caption = element_text(size = 30, hjust=0),
+        legend.title = element_blank()
+        )
+
 f.ggsave <- function(name = "asdf", width.sav = 16, height.sav = 9, dpi.sav = 150, output.type = "png"){
   filepath <- paste0("05. Visualizations/", name, "_", today(), ".", output.type)
   ggsave(filepath, width = width.sav, height = height.sav, units = "in", dpi = dpi.sav)
   # print(filepath)
 }
 
-# f.ggsave(name = "FactivaViz",
-#          width.sav = 16,
-#          height.sav = 9)
+f.tidy.reg <- function(dv.sav = dv, iv.sav = iv, ctrl.sav = ctrl,
+                        dataframe.sav = p.df, 
+                        effect.sav = "twoways",
+                        model.sav = "within"){
+  formula_str <- paste0(dv.sav, "~", iv.sav, "+", ctrl.sav)
+  out <- plm(as.formula(paste(formula_str, collapse = " ")),
+             data = dataframe.sav, effect = effect.sav, model = model.sav)
+  tidyout <- tidy(out, conf.int = TRUE, conf.level = 0.9)
+  return(tidyout)
+}
 
 ```
 
@@ -103,6 +128,7 @@ df_factiva %>%
   scale_y_continuous(labels = scales::comma_format()) +
   format
 
+# Save visualization
 f.ggsave(name = "FactivaViz",
          width.sav = 12,
          height.sav = 8,
@@ -127,12 +153,12 @@ df_2012 <- df_2012 %>%
     court_challenge_rejected_count_VAR > 0 ~ "Court finding: Constitutional map  ",
     court_return_leg_count_VAR > 0 ~ "Court finding: Unconstitutional map  ",
     court_map_drawn_count_VAR > 0 ~ "Court finding: Unconstitutional map  ",
-    court_action_none_count_VAR > 0 ~ "Redistricting with no court invovlement  ",
+    court_action_none_count_VAR > 0 ~ "Redistricting with no court involvement  ",
     TRUE ~ "No redistricting  "
   )) %>% 
   mutate(court_combined_VAR = factor(court_combined_VAR, 
                                      levels = c("No redistricting  ", 
-                                               "Redistricting with no court invovlement  ",
+                                               "Redistricting with no court involvement  ",
                                                "Court finding: Constitutional map  ",
                                                "Court finding: Unconstitutional map  "
                                                )))
@@ -154,12 +180,12 @@ color_palette <- brewer.pal(n = 5, name = "YlOrRd")
 category_colors <- c("Court finding: Unconstitutional map  " = color_palette[5],  # Deep Red
                      # "Returned to Legislature" = color_palette[4],  # Orange-Red
                      "Court finding: Constitutional map  " = color_palette[3],  # Orange
-                     "Redistricting with no court invovlement  " = color_palette[2],  # Light Orange-Yellow
+                     "Redistricting with no court involvement  " = color_palette[2],  # Light Orange-Yellow
                      "No redistricting  " = "white")  # White for None
 
 category_colors <- c("Court finding: Unconstitutional map  " = "#FF687F",
                      "Court finding: Constitutional map  " = "#005E8A",
-                     "Redistricting with no court invovlement  " = "#FFB188",
+                     "Redistricting with no court involvement  " = "#FFB188",
                      "No redistricting  " = "#D3D4D6")
 
 ### Plot using usmap (now with full state names)
@@ -179,11 +205,151 @@ plot_usmap(data = df_2012, values = "court_combined_VAR", regions = "states", co
   #   nrow = 1  # Place categories in a single row
   # ))
 
+# Save visualization
 f.ggsave(name = "MapViz", width.sav = 12, height.sav = 8, 
          output.type = "jpg")
 
 ```
 
+## Regression (Coefficient Plot)
+```{r prep regression coefficient}
+
+### Setting variables
+dv <- "log(vep_turnout_rate)"
+ctrl <- "log(vep_density) + log(state_unemploymentRate) + stateparty_control + log(lagged_vep) + log(vote_closeness)"
+
+### Creating Tidy Data
+tidyout_NONE <- f.tidy.reg(dv.sav = dv, iv.sav = "interaction_court_action_none_count", ctrl.sav = ctrl) %>% 
+  mutate(model_desc = "No court involvement",
+         model = "Model A")
+
+tidyout_ANY <- f.tidy.reg(dv.sav = dv, iv.sav = "interaction_judiciary", ctrl.sav = ctrl) %>% 
+  mutate(model_desc = "ANY court involvement",
+         model = "Model B")
+
+tidyout_UNFAIR <- f.tidy.reg(dv.sav = dv, iv.sav = "interaction_judiciary_unfair", ctrl.sav = ctrl) %>% 
+  mutate(model_desc = "Court finding: Unconstitutional map",
+         model = "Model C")
+
+tidyout_FAIR <- f.tidy.reg(dv.sav = dv, iv.sav = "interaction_judiciary_fair", ctrl.sav = ctrl) %>% 
+  mutate(model_desc = "Court finding: Constitutional map",
+         model = "Model D")
+
+### Join tidy data
+all_models <- bind_rows(tidyout_NONE, tidyout_ANY, tidyout_UNFAIR, tidyout_FAIR) %>% 
+  mutate(model = factor(model, levels = c("Model A", "Model B", "Model C", "Model D")))
+
+```
+
+```{r coeff viz}
+
+################################################################################
+### Creating Coefficient Plot (Interaction ONLY)
+
+all_models %>% 
+  filter(grepl("interaction", term)) %>%
+  dwplot(model_order = c("Model A", "Model B", "Model C", "Model D"),
+         ci = 0.90,
+         dot_args = list(size = 3),
+         whisker_args = list(size = 1.5)
+         ) %>% 
+  relabel_predictors(c(`interaction_court_action_none_count` = "Interaction Term (Treatment x Time):\nNo court involvement ",
+                       `interaction_judiciary` = "Interaction Term (Treatment x Time):\nANY court involvement ",
+                       `interaction_judiciary_unfair` = "Interaction Term (Treatment x Time):\nCourt finding - Unconstitutional map ",
+                       `interaction_judiciary_fair` = "Interaction Term (Treatment x Time):\nCourt finding - Constitutional map "
+                       ))+
+  geom_vline(xintercept = 0,
+               colour = "grey60",
+               linetype = 2) +
+  labs(title = "Effects on Logged Voter Turnout Rates By \nJudicial Involvements in Redistricting (90% CI)",
+       subtitle = "Results from multivariate regression models using time and state fixed effects",
+       x = "\nCoefficient Estimates"
+       ) +
+  format2+
+  theme(legend.key.size = unit(2, "cm"),
+        panel.border = element_rect(colour = "black", fill=NA))
+
+# Save visualization
+f.ggsave(name = "CoeffViz_Interaction",
+         width.sav = 16,
+         height.sav = 12,
+         output.type = "jpg")
+
+
+################################################################################
+### Creating Coefficient Plot (some covariates)
+
+all_models %>% 
+  filter(!term %in% c("log(vep_density)", "log(state_unemploymentRate)", "log(lagged_vep)")) %>%
+  dwplot(model_order = c("Model A", "Model B", "Model C", "Model D"),
+         ci = 0.90,
+         dot_args = list(size = 3),
+         whisker_args = list(size = 1.5)
+         ) %>% 
+  relabel_predictors(c(`interaction_court_action_none_count` = "Interaction Term (Treatment x Time):\nNo court involvement ",
+                       `interaction_judiciary` = "Interaction Term (Treatment x Time):\nANY court involvement ",
+                       `interaction_judiciary_unfair` = "Interaction Term (Treatment x Time):\nCourt finding - Unconstitutional map ",
+                       `interaction_judiciary_fair` = "Interaction Term (Treatment x Time):\nCourt finding - Constitutional map ",
+                       `stateparty_controlDEM` = "State Legislature Control:\nDemocrats",
+                       `stateparty_controlREP` = "State Legislature Control:\nRepublicans",
+                       `log(vote_closeness)` = "Closeness of Votes Between Candidates\n(Logged percentage)"
+                       ))+
+  geom_vline(xintercept = 0,
+               colour = "grey60",
+               linetype = 2) +
+  labs(title = "Effects on Logged Voter Turnout Rates By \nJudicial Involvements in Redistricting (90% CI)",
+       subtitle = "Results from multivariate regression models using time and state fixed effects",
+       x = "\nCoefficient Estimates"
+       ) +
+  format2+
+  theme(legend.key.size = unit(2, "cm"),
+        panel.border = element_rect(colour = "black", fill=NA))
+
+# Save visualization
+f.ggsave(name = "CoeffViz_partial",
+         width.sav = 16,
+         height.sav = 12,
+         output.type = "jpg")
+
+
+################################################################################
+### Creating Coefficient Plot (ALL variables)
+
+all_models %>% 
+  # filter(term %in% c("log(vep_density)", "")) %>%
+  dwplot(model_order = c("Model A", "Model B", "Model C", "Model D"),
+         ci = 0.90,
+         dot_args = list(size = 3),
+         whisker_args = list(size = 1.5)
+         ) %>% 
+  relabel_predictors(c(`interaction_court_action_none_count` = "Interaction Term (Treatment x Time):\nNo court involvement ",
+                       `interaction_judiciary` = "Interaction Term (Treatment x Time):\nANY court involvement ",
+                       `interaction_judiciary_unfair` = "Interaction Term (Treatment x Time):\nCourt finding - Unconstitutional map ",
+                       `interaction_judiciary_fair` = "Interaction Term (Treatment x Time):\nCourt finding - Constitutional map "
+                       ))+
+  geom_vline(xintercept = 0,
+               colour = "grey60",
+               linetype = 2) +
+  labs(title = "Effects on Logged Voter Turnout Rates By \nJudicial Involvements in Redistricting (90% CI)",
+       subtitle = "Results from multivariate regression models using time and state fixed effects",
+       x = "\nCoefficient Estimates"
+       ) +
+  format2+
+  theme(legend.key.size = unit(2, "cm"),
+        panel.border = element_rect(colour = "black", fill=NA))
+
+# Save visualization
+f.ggsave(name = "CoeffViz_All",
+         width.sav = 16,
+         height.sav = 12,
+         output.type = "jpg")
+
+
+```
+
+
+
+# Misc
 ```{r}
 # Replace NA values in redistrict_count with 0 and clean
 X2024_09_24_electiondataset$redistrict_count[is.na(X2024_09_24_electiondataset$redistrict_count)] <- 0
