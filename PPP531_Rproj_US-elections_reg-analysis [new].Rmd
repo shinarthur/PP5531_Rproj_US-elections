@@ -173,7 +173,8 @@ f.reg.multi.iv <- function(dv.sav = dv,
           # no.space = TRUE,
           font.size = "small",
           column.labels = dv_label.sav,
-          covariate.labels = cov_label.sav
+          covariate.labels = cov_label.sav,
+          model.numbers = F
           ) %>%
     return()
   
@@ -531,19 +532,34 @@ f.reg.multi(dv.sav = dv, iv.sav = iv,
 
 ```{r multi IV testing}
 dv <- "log(vep_turnout_rate)"
-iv <- c("interaction_judiciary", "interaction_court_action_none_count", "interaction_judiciary_unfair", "interaction_court_challenge_rejected_count", "interaction_judiciary_fair")
+iv <- c("interaction_court_action_none_count", "interaction_judiciary",  "interaction_judiciary_unfair", "interaction_judiciary_fair")
 ctrl <- "log(vep_density) + log(state_unemploymentRate) + stateparty_control + log(lagged_vep) + log(vote_closeness)"
+
+dv_label <- c("Model A", "Model B", "Model C", "Model D")
+
+cov_label <- c("Interaction (ANY Judicial Involvement X Time)",
+               "Interaction (NO Judicial Involvement X Time)",
+               "Interaction (Judicial Finding: UNFAIR Map X Time)",
+               "Interaction (Judicial Finding: FAIR Map X Time)",
+               "Voter Population Density (Logged)",
+               "State Unemployment Rate  (Logged)",
+               "State legislature control - DEM",
+               "State legislature control - REP",
+               "Vote Closeness of Candidates (Logged)",
+               "4-year-lagged Voter Turnout Rate (Logged)"
+               )
 
 f.reg.multi.iv(dv.sav = dv, 
                iv.sav = iv, 
                ctrl.sav = ctrl,
                dataframe.sav = p.df, 
-               title.sav = "testingasdf", 
+               title.sav = "Voting-Eligible-Population Turnout Rate (Logged)", 
                effect.sav = "twoways",
                type.sav = "within", 
-               dv_label.sav = NULL, cov_label.sav = NULL,
-               star.type = ifelse(knitr::is_latex_output(),"latex", "text"),
-               star.out = NULL)
+               dv_label.sav = dv_label, cov_label.sav = cov_label,
+               star.type = "html",
+               star.out = paste0("05. Visualizations/", today(), "-regression-tbl-did.html"),
+               out.sav = F)
 
 outputs <- list()
 
@@ -568,11 +584,11 @@ outputs <- f.reg.multi.iv(dv.sav = dv,
 #   out.df <- rbind(out.df, temp)
 # }
 
-ggcoef(outputs[[4]], 
-       conf.int = T, 
-       conf.level = 0.90,
-       exclude_intercept = T
-       )
+# ggcoef(outputs[[4]], 
+#        conf.int = T, 
+#        conf.level = 0.90,
+#        exclude_intercept = T
+#        )
 
 ```
 
