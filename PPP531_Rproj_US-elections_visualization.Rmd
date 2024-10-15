@@ -21,6 +21,7 @@ library(ggthemes)
 library(hrbrthemes)
 library(viridis)
 library(showtext)
+library(ggpmisc)
 sysfonts::font_add_google("Roboto Condensed")
 showtext_auto()
 
@@ -105,7 +106,10 @@ f.tidy.reg <- function(dv.sav = dv, iv.sav = iv, ctrl.sav = ctrl,
   formula_str <- paste0(dv.sav, "~", iv.sav, "+", ctrl.sav)
   out <- plm(as.formula(paste(formula_str, collapse = " ")),
              data = dataframe.sav, effect = effect.sav, model = model.sav)
-  tidyout <- tidy(out, conf.int = TRUE, conf.level = 0.9)
+  tidyout.coef <- tidy(out, conf.int = TRUE, conf.level = 0.9)
+  tidyout.fitted <- fitted(out)
+  tidyout.resid <- resid(out)
+  tidyout <- list(tidyout.coef, tidyout.fitted, tidyout.resid)
   return(tidyout)
 }
 
@@ -219,25 +223,51 @@ dv <- "log(vep_turnout_rate)"
 ctrl <- "log(vep_density) + log(state_unemploymentRate) + stateparty_control + log(lagged_vep) + log(vote_closeness)"
 
 ### Creating Tidy Data
-tidyout_NONE <- f.tidy.reg(dv.sav = dv, iv.sav = "interaction_court_action_none_count", ctrl.sav = ctrl) %>% 
+tidyout_NONE <- f.tidy.reg(dv.sav = dv, iv.sav = "interaction_court_action_none_count", ctrl.sav = ctrl)[[1]] %>% 
   mutate(model_desc = "No court involvement",
          model = "Model A")
 
-tidyout_ANY <- f.tidy.reg(dv.sav = dv, iv.sav = "interaction_judiciary", ctrl.sav = ctrl) %>% 
+tidyout_ANY <- f.tidy.reg(dv.sav = dv, iv.sav = "interaction_judiciary", ctrl.sav = ctrl)[[1]] %>% 
   mutate(model_desc = "ANY court involvement",
          model = "Model B")
 
-tidyout_UNFAIR <- f.tidy.reg(dv.sav = dv, iv.sav = "interaction_judiciary_unfair", ctrl.sav = ctrl) %>% 
+tidyout_UNFAIR <- f.tidy.reg(dv.sav = dv, iv.sav = "interaction_judiciary_unfair", ctrl.sav = ctrl)[[1]] %>% 
   mutate(model_desc = "Court finding: Unconstitutional map",
          model = "Model C")
 
-tidyout_FAIR <- f.tidy.reg(dv.sav = dv, iv.sav = "interaction_judiciary_fair", ctrl.sav = ctrl) %>% 
+tidyout_FAIR <- f.tidy.reg(dv.sav = dv, iv.sav = "interaction_judiciary_fair", ctrl.sav = ctrl)[[1]] %>% 
   mutate(model_desc = "Court finding: Constitutional map",
          model = "Model D")
 
 ### Join tidy data
 all_models <- bind_rows(tidyout_NONE, tidyout_ANY, tidyout_UNFAIR, tidyout_FAIR) %>% 
   mutate(model = factor(model, levels = c("Model A", "Model B", "Model C", "Model D")))
+
+### Creating residual data
+resid_NONE <- f.tidy.reg(dv.sav = dv, iv.sav = "interaction_court_action_none_count", ctrl.sav = ctrl)[[3]] %>% 
+  as.data.frame() %>% 
+  mutate(model_desc = "No court involvement",
+         model = "Model A")
+
+resid_ANY <- f.tidy.reg(dv.sav = dv, iv.sav = "interaction_judiciary", ctrl.sav = ctrl)[[3]] %>%
+  as.data.frame() %>% 
+  mutate(model_desc = "ANY court involvement",
+         model = "Model B")
+
+resid_UNFAIR <- f.tidy.reg(dv.sav = dv, iv.sav = "interaction_judiciary_unfair", ctrl.sav = ctrl)[[3]] %>%
+  as.data.frame() %>% 
+  mutate(model_desc = "Court finding: Unconstitutional map",
+         model = "Model C")
+
+resid_FAIR <- f.tidy.reg(dv.sav = dv, iv.sav = "interaction_judiciary_fair", ctrl.sav = ctrl)[[3]] %>%
+  as.data.frame() %>% 
+  mutate(model_desc = "Court finding: Constitutional map",
+         model = "Model D")
+
+### Join tidy data
+all_resid <- bind_rows(resid_NONE, resid_ANY, resid_UNFAIR, resid_FAIR) %>% 
+  mutate(model = factor(model, levels = c("Model A", "Model B", "Model C", "Model D"))) %>% 
+  rename(resid = ".")
 
 ```
 
@@ -394,5 +424,30 @@ ggplot(cleaned_data_selected_states, aes(x = as.factor(redistrict_count), y = ve
        x = "Redistrict Count", 
        y = "VEP Turnout Rate") +
   theme_minimal()
+
+### Residual tests
+ggplot(data = all_resid, aes(sample = resid)) +
+  geom_qq() +
+  stat_qq_line(col="red") +
+  facet_wrap(vars(model)) +
+  labs(title = "Q-Q Plots: Normality of Residuals for Each Model") +
+  theme_minimal()
+
+res_test <- all_resid %>% 
+  group_by(model) %>% 
+  summarize(tidy(Box.test(resid, lag = 40, type = c("Box-Pierce", "Ljung-Box"))))
+
+
+### Distribution of DV
+cleaned_data <- p.df %>%
+  filter(!is.na(vep_turnout_rate))
+
+ggplot(cleaned_data, aes(vep_turnout_rate)) +
+  geom_histogram()
+
+hist(p.df$vep_turnout_rate, breaks = 30, col = "#FF687F", border = "white",
+     main = "Histogram of Turnout Rates",
+     xlab = "VEP Turnout Rate")
+  
 ```
 
