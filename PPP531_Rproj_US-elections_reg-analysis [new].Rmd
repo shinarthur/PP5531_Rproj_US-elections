@@ -222,6 +222,12 @@ iv_control <- "log(vep_density) + log(state_unemploymentRate) + stateparty_contr
 
 ```
 
+```{r export}
+### Save dataset
+saveRDS(p.df, file = paste0("04. Outputs/", today(), "_regressionDF.rds"))
+
+```
+
 ```{r}
 ### WITH judiciary_VAR
 dv <- c("avg_DEMvote_perc", "avg_REPvote_perc", "log(vep_turnout_rate)")
