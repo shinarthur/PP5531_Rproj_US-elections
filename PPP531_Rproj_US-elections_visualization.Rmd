@@ -215,6 +215,25 @@ f.ggsave(name = "MapViz", width.sav = 12, height.sav = 8,
 
 ```
 
+## Regression (Correlation Plot)
+```{r correlation check}
+
+turnout_rate <- p.df$vep_turnout_rate
+vep_density <- p.df$vep_density
+unemployment <- p.df$state_unemploymentRate
+vote_closeness <- p.df$vote_closeness
+
+pseries_df <- data.frame(turnout_rate, vep_density, unemployment, vote_closeness) %>% 
+  na.omit()
+
+cormatrix <- cor(pseries_df)
+
+print(cormatrix)
+corrplot(cormatrix, method = "circle")
+
+
+```
+
 ## Regression (Coefficient Plot)
 ```{r prep regression coefficient}
 
