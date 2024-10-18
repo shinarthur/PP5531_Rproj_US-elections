@@ -288,6 +288,36 @@ all_resid <- bind_rows(resid_NONE, resid_ANY, resid_UNFAIR, resid_FAIR) %>%
   mutate(model = factor(model, levels = c("Model A", "Model B", "Model C", "Model D"))) %>% 
   rename(resid = ".")
 
+### Creating fitted data
+fitted_NONE <- f.tidy.reg(dv.sav = dv, iv.sav = "interaction_court_action_none_count", ctrl.sav = ctrl)[[2]] %>% 
+  as.data.frame() %>% 
+  mutate(model_desc = "No court involvement",
+         model = "Model A")
+
+fitted_ANY <- f.tidy.reg(dv.sav = dv, iv.sav = "interaction_judiciary", ctrl.sav = ctrl)[[2]] %>%
+  as.data.frame() %>% 
+  mutate(model_desc = "ANY court involvement",
+         model = "Model B")
+
+fitted_UNFAIR <- f.tidy.reg(dv.sav = dv, iv.sav = "interaction_judiciary_unfair", ctrl.sav = ctrl)[[2]] %>%
+  as.data.frame() %>% 
+  mutate(model_desc = "Court finding: Unconstitutional map",
+         model = "Model C")
+
+fitted_FAIR <- f.tidy.reg(dv.sav = dv, iv.sav = "interaction_judiciary_fair", ctrl.sav = ctrl)[[2]] %>%
+  as.data.frame() %>% 
+  mutate(model_desc = "Court finding: Constitutional map",
+         model = "Model D")
+
+### Join tidy data
+all_fitted <- bind_rows(fitted_NONE, fitted_ANY, fitted_UNFAIR, fitted_FAIR) %>% 
+  mutate(model = factor(model, levels = c("Model A", "Model B", "Model C", "Model D"))) %>% 
+  rename(fitted = ".")
+
+### Merge residual and fitted data
+all_resxfit <- all_resid %>% 
+  cbind(fitted = all_fitted$fitted)
+
 ```
 
 ```{r coeff viz}
@@ -452,10 +482,39 @@ ggplot(data = all_resid, aes(sample = resid)) +
   labs(title = "Q-Q Plots: Normality of Residuals for Each Model") +
   theme_minimal()
 
+f.ggsave(name = "QQ Plots",
+         width.sav = 12,
+         height.sav = 8,
+         output.type = "jpg")
+
 res_test <- all_resid %>% 
   group_by(model) %>% 
   summarize(tidy(Box.test(resid, lag = 40, type = c("Box-Pierce", "Ljung-Box"))))
 
+ggplot(data = all_resxfit, aes(x = fitted, y = resid)) +
+  geom_point() +
+  geom_hline(yintercept = 0) +
+  facet_wrap(vars(model)) +
+  labs(title = "Residual Plots: Heteroscedasticity Test for Each Model",
+       x='Fitted Values', y='Residuals') +
+  theme_minimal()
+
+f.ggsave(name = "Residual Plots_H-test",
+         width.sav = 12,
+         height.sav = 8,
+         output.type = "jpg")
+
+ggplot(data = all_resxfit, aes(x = resid)) +
+  geom_density() +
+  facet_wrap(vars(model)) +
+  labs(title = "Residual Plots: Density",
+       x='Residuals', y = "Density") +
+  theme_minimal()
+
+f.ggsave(name = "Residual Plots_Density",
+         width.sav = 12,
+         height.sav = 8,
+         output.type = "jpg")
 
 ### Distribution of DV
 cleaned_data <- p.df %>%
