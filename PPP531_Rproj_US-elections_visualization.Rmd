@@ -526,6 +526,17 @@ ggplot(cleaned_data, aes(vep_turnout_rate)) +
 hist(p.df$vep_turnout_rate, breaks = 30, col = "#FF687F", border = "white",
      main = "Histogram of Turnout Rates",
      xlab = "VEP Turnout Rate")
+
+### Parallel Trend Assumption Check
+mean_vep <- p.df %>%
+  group_by(year, judiciary_fair_map_VAR) %>%
+  summarise(mean_vep = mean(log(vep_turnout_rate), na.rm = TRUE)) %>% 
+  filter(!(year == 2000))
+
+ggplot(mean_vep, aes(x = year, y = mean_vep, color = judiciary_fair_map_VAR, group = judiciary_fair_map_VAR)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  ylim(4,6)
   
 ```
 
