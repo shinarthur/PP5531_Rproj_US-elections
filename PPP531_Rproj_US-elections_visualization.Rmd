@@ -193,7 +193,8 @@ category_colors <- c("Court finding: Unconstitutional map  " = "#FF687F",
                      "No redistricting  " = "#D3D4D6")
 
 ### Plot using usmap (now with full state names)
-plot_usmap(data = df_2012, values = "court_combined_VAR", regions = "states", color =) +
+plot_usmap(data = df_2012, values = "court_combined_VAR", regions = "states"
+           , color = "white") +
   scale_fill_manual(values = category_colors, name = "Type of Court Action") +
   labs(title = "\nTypes of Court Involvement in State Redistricting \nDuring the 2012 Election Cycle",
        subtitle = "\n" ) +
@@ -214,6 +215,26 @@ f.ggsave(name = "MapViz", width.sav = 12, height.sav = 8,
          output.type = "jpg")
 
 ```
+
+```{r bargraph_map}
+
+df_2012 %>% 
+  ggplot(aes(x = court_combined_VAR, fill = court_combined_VAR))+
+  geom_bar(width = 0.7)+
+  scale_fill_manual(values = category_colors, name = "Type of Court Action")+
+  labs(title = "Count of the Types of Court Involvement \nDuring the 2012 Election Cycle", 
+       x = "",
+       y = "Number of States\n"
+       ) +
+  coord_flip()+
+  format
+
+# Save visualization
+f.ggsave(name = "MapVizBar", width.sav = 20, height.sav = 9, 
+         output.type = "jpg")
+
+```
+
 
 ## Regression (Correlation Plot)
 ```{r correlation check}
