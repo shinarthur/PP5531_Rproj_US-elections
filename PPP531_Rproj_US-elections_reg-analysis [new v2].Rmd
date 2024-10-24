@@ -39,7 +39,7 @@ knitr::opts_knit$set(root.dir = here::here())
 rm(list=ls())
 
 ### Import data created in dataset-creation.rmd
-df <- read_rds("04. Outputs/2024-10-09_electiondataset.rds")
+df <- read_rds("04. Outputs/2024-10-24_electiondataset.rds")
 
 ### Legend of variables (variable name x explanation of each variable)
 legend_df <- sjlabelled::get_label(df) %>%
@@ -223,6 +223,8 @@ table(p.df$interaction_judiciary)
 ### Save dataset
 saveRDS(p.df, file = paste0("04. Outputs/", today(), "_regressionDF.rds"))
 
+p.df <- read_rds("04. Outputs/2024-10-13_regressionDF.rds")
+
 ```
 
 ```{r multi IV testing}
@@ -269,7 +271,7 @@ robustSE_check %>%
 
 ```
 
-# Effects of Redistricting
+# Effects of Just Redistricting
 ```{r}
 
 dv <- "log(vep_turnout_rate)"

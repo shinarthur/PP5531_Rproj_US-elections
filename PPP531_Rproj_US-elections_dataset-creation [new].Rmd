@@ -603,7 +603,6 @@ legend <- sjlabelled::get_label(df_final) %>%
 
 ```
 
-
 ```{r export}
 ### Save dataset
 # write.csv(df_final, file = paste0("04. Outputs/", today(), "_electiondataset.csv"))
@@ -619,15 +618,3 @@ df <- read_rds("04. Outputs/2024-10-09_electiondataset.rds")
 
 ```
 
-# Playing with TidyCensus
-```{r}
-pop <- data.frame()
-
-
-pop <- get_flows(
-  geography = "state",
-  year = 2021
-)
-
-
-```
