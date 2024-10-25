@@ -32,7 +32,9 @@ library(usmap)
 # regression / coefplot packages
 library(plm)
 library(broom)
+library(corrplot)
 library(dotwhisker)
+library(did)
 
 ### Change directory here. 
 ### As long as file structure is same as github structure, directory does not need to be changed.
@@ -61,7 +63,7 @@ df_factiva <- IMPORT.factiva %>%
   filter(!is.na(Year), !is.na(Document_Count)) # Remove rows with missing data (if any)
 
 ### Import regression p dataframe
-p.df <- read_rds("04. Outputs/2024-10-13_regressionDF.rds")
+p.df <- read_rds("04. Outputs/2024-10-20_regressionDF.rds")
   
 ```
 
@@ -551,13 +553,49 @@ hist(p.df$vep_turnout_rate, breaks = 30, col = "#FF687F", border = "white",
 ### Parallel Trend Assumption Check
 mean_vep <- p.df %>%
   group_by(year, judiciary_fair_map_VAR) %>%
-  summarise(mean_vep = mean(log(vep_turnout_rate), na.rm = TRUE)) %>% 
+  summarise(mean_vep = mean(log(vep_turnout_rate), na.rm = TRUE)) #%>% 
   filter(!(year == 2000))
 
 ggplot(mean_vep, aes(x = year, y = mean_vep, color = judiciary_fair_map_VAR, group = judiciary_fair_map_VAR)) +
   geom_line(size = 1) +
-  geom_point(size = 2) +
+  geom_point(size = 2)+
+  geom_vline(xintercept = 2010)
   ylim(4,6)
   
 ```
+
+```{r}
+
+p.df <- read_rds("04. Outputs/2024-10-13_regressionDF.rds")
+
+test <- p.df %>% 
+  filter(year_num == 2012 & judiciary_fair_map_VAR == 1) %>% 
+  select(state_abv) %>% 
+  mutate(first_treat = 2012) %>% 
+  right_join(p.df, by = join_by("state_abv")) %>%
+  mutate(first_treat = ifelse(is.na(first_treat), 0, first_treat)) %>% 
+  mutate(vep_turn_ln = log(vep_turnout_rate),
+         fips_num = as.numeric(fips))
+
+library(did)
+
+out <- att_gt(yname = "vep_turn_ln",
+              gname = "first_treat",
+              idname = "fips_num",
+              tname = "year_num",
+              data = test,
+              # xformla = ~ 
+              # ,
+              est_method = "reg")
+
+out %>% 
+  summary()
+
+ggdid(out)
+
+aggte(out, type = "dynamic") %>% 
+  ggdid()
+
+```
+
 
