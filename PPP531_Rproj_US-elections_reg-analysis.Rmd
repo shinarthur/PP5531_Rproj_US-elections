@@ -1,12 +1,16 @@
 ---
-title: "U.S. Election Project"
+title: "U.S. Election Project | Regression Analysis"
 author: "Arthur, Moritz, San Hong"
-date: "2024-09-10"
-output: html_document
+date: "2024-11-01"
+output: 
+  html_document:
+    toc: TRUE
+    toc_float: TRUE
 ---
 
 # Setup
-```{r setup}
+Loading packages and setting working directly. Note that working directory is set by the `here::here()` command and does not need to be edited, so long as file structure is maintained.
+```{r setup, message=FALSE, warning=FALSE}
 
 # install.packages("here")
 # install.packages("tidyverse")
@@ -29,17 +33,20 @@ library(GGally)
 ### Change directory here. 
 ### As long as file structure is same as github structure, directory does not need to be changed.
 knitr::opts_knit$set(root.dir = here::here())
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
 
 ```
 
-
+# Import Data
+Importing finalized dataset from previous file. 
 ```{r import data}
 
 ### Clean environment
 rm(list=ls())
 
 ### Import data created in dataset-creation.rmd
-df <- read_rds("04. Outputs/2024-10-24_electiondataset.rds")
+df <- read_rds("04. Outputs/2024-10-26_electiondataset.rds")
 
 ### Legend of variables (variable name x explanation of each variable)
 legend_df <- sjlabelled::get_label(df) %>%
@@ -52,7 +59,8 @@ df_nolabel <- labelled::remove_labels(df)
 
 ```
 
-
+## Data Check
+Checking if dataset is correct.
 ```{r data-check}
 
 temp.variable_list <- c("court_action_none_count_VAR", "court_map_drawn_count_VAR", "court_return_leg_count_VAR", "court_challenge_rejected_count_VAR", "judiciary_VAR", "judiciary_unfair_map_VAR", "judiciary_fair_map_VAR")
@@ -79,6 +87,7 @@ rm(list = grep("temp", ls(), value = TRUE))
 
 
 # Functions
+Creating multiple custom functions to streamline the `plm()` and `stargazer()` process into one. As well as enabling it to work with multiple models simulatneously.
 ```{r custom reg function}
 ### Creating a function to run multiple regressions simultaneously
 f.reg.multi <- function(dv.sav = dv, 
@@ -184,6 +193,8 @@ f.reg.multi.iv <- function(dv.sav = dv,
 
 
 # Analysis Section
+## Data Preparation
+Creating interaction terms and checking dataset again.
 ```{r did}
 
 ### Panel Data Frame for DID
@@ -218,15 +229,14 @@ table(p.df$interaction_judiciary)
 
 
 ```
-
+## Export
 ```{r export}
 ### Save dataset
 saveRDS(p.df, file = paste0("04. Outputs/", today(), "_regressionDF.rds"))
 
-p.df <- read_rds("04. Outputs/2024-10-13_regressionDF.rds")
-
 ```
 
+## Regression
 ```{r multi IV testing}
 dv <- "log(vep_turnout_rate)"
 iv <- c("interaction_court_action_none_count", "interaction_judiciary",  "interaction_judiciary_unfair", "interaction_judiciary_fair")
@@ -254,14 +264,15 @@ f.reg.multi.iv(dv.sav = dv,
                effect.sav = "twoways",
                type.sav = "within", 
                dv_label.sav = dv_label, cov_label.sav = cov_label,
-               star.type = "html",
-               star.out = paste0("05. Visualizations/", today(), "-regression-tbl-did.html"),
-               out.sav = F)
+               star.type = "text",
+               star.out = paste0("05. Visualizations/", today(), "-regression-tbl-did.txt"),
+               out.sav = F
+               )
 
 ```
 
-# Robust Standard Error
-```{r}
+### Checking Robust Standard Error
+```{r robustSE}
 
 robustSE_check <- plm(log(vep_turnout_rate) ~ interaction_judiciary_fair + log(vep_density) + log(state_unemploymentRate) + stateparty_control + log(lagged_vep) + log(vote_closeness),
                       data = p.df, effect = "twoways", model = "within")
@@ -271,8 +282,27 @@ robustSE_check %>%
 
 ```
 
-# Effects of Just Redistricting
-```{r}
+### Descriptive Statistics
+```{r descriptivestats}
+
+p.df %>%
+  as.data.frame() %>% 
+  select(vep_turnout_rate, vep_density, state_unemploymentRate, vote_closeness) %>%
+  mutate_all(~log(.), ) %>% 
+  rename_with(~paste0(.,"_ln")) %>% 
+  stargazer(type = "text",
+            digits = 2,
+            title = "Descriptive Statistics",
+            out = paste0("05. Visualizations/", today(), "-descstat.txt")
+            )
+
+
+```
+
+
+# Misc Regression
+Testing the effects of just redistricting
+```{r misc regression}
 
 dv <- "log(vep_turnout_rate)"
 iv <- c("interaction_redistrict")

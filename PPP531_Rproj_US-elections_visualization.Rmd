@@ -1,12 +1,16 @@
 ---
-title: "U.S. Election Project"
+title: "U.S. Election Project | Visualization"
 author: "Arthur, Moritz, San Hong"
-date: "2024-09-10"
-output: html_document
+date: "2024-11-01"
+output: 
+  html_document:
+    toc: TRUE
+    toc_float: TRUE
 ---
 
 # Setup
-```{r setup}
+Loading packages and setting working directly. Note that working directory is set by the `here::here()` command and does not need to be edited, so long as file structure is maintained.
+```{r setup, message=FALSE, warning=FALSE}
 
 # basic R packages
 library(here)
@@ -39,15 +43,18 @@ library(did)
 ### Change directory here. 
 ### As long as file structure is same as github structure, directory does not need to be changed.
 knitr::opts_knit$set(root.dir = here::here())
+knitr::opts_chunk$set(message=FALSE)
+knitr::opts_chunk$set(warning=FALSE)
 
 ```
 
-
+# Import Data
+Importing data necessary to create visualizations.
 ```{r import data}
 rm(list=ls())
 
 ### Import election dataset
-df <- read_rds("04. Outputs/2024-10-09_electiondataset.rds")
+df <- read_rds("04. Outputs/2024-10-26_electiondataset.rds")
 
 legend <- df %>% 
   colnames() %>% 
@@ -63,11 +70,12 @@ df_factiva <- IMPORT.factiva %>%
   filter(!is.na(Year), !is.na(Document_Count)) # Remove rows with missing data (if any)
 
 ### Import regression p dataframe
-p.df <- read_rds("04. Outputs/2024-10-20_regressionDF.rds")
+p.df <- read_rds("04. Outputs/2024-10-26_regressionDF.rds")
   
 ```
 
 # Formatting Presets
+Custom presets for ggplot elements and custom function to save ggplots in a consistent manner.
 ```{r custom presets & function}
 
 format <- theme_ipsum_rc(base_size = 30)+
@@ -119,8 +127,10 @@ f.tidy.reg <- function(dv.sav = dv, iv.sav = iv, ctrl.sav = ctrl,
 
 
 # Background Visualization
+Data visualizations to help establish the context.
 
 ## Factiva Search
+Trends in articles mentioning 'gerrymandering'.
 ```{r factiva viz}
 
 # Create the bar chart with the YlOrRd color palette
@@ -141,7 +151,9 @@ f.ggsave(name = "FactivaViz",
          output.type = "jpg")
 
 ```
+
 ## Geospatial
+Map of the type of court involvement in state redistricting during the 2012 election cycle per state.
 ```{r geospatial viz}
 
 ### Preparing data
@@ -218,6 +230,7 @@ f.ggsave(name = "MapViz", width.sav = 12, height.sav = 8,
 
 ```
 
+A bargraph version to better portray the number of states per action.
 ```{r bargraph_map}
 
 df_2012 %>% 
@@ -259,6 +272,8 @@ corrplot(cormatrix, method = "circle")
 ```
 
 ## Regression (Coefficient Plot)
+### Preparation
+Creating the tidy output of the regression.
 ```{r prep regression coefficient}
 
 ### Setting variables
@@ -344,6 +359,8 @@ all_resxfit <- all_resid %>%
 
 ```
 
+### Visualization code
+Creating the coefficient plot.
 ```{r coeff viz}
 
 ################################################################################
@@ -450,9 +467,40 @@ f.ggsave(name = "CoeffViz_All",
 
 ```
 
+## Other Robustness Checks
+Testing parallel trends assumption:
+* Wald test result = 0.055
+* Trend bars insignificant
 
 
-## Other Robustness Check
+```{r parallel trends}
+### Testing parallel trends assumption
+ptrends <- p.df %>% 
+  filter(year_num == 2012 & judiciary_fair_map_VAR == 1) %>% 
+  select(state_abv) %>% 
+  mutate(first_treat = 2012) %>% 
+  right_join(p.df, by = join_by("state_abv")) %>%
+  mutate(first_treat = ifelse(is.na(first_treat), 0, first_treat)) %>% 
+  mutate(vep_turn_ln = log(vep_turnout_rate),
+         fips_num = as.numeric(fips))
+
+out <- att_gt(yname = "vep_turn_ln",
+              gname = "first_treat",
+              idname = "fips_num",
+              tname = "year_num",
+              data = ptrends,
+              # xformla = ~1
+              # ,
+              est_method = "reg")
+
+### Wald test for p-trend
+summary(out)
+
+# Trend bars
+ggdid(out)
+
+```
+
 ```{r}
 ### Residual tests
 ggplot(data = all_resid, aes(sample = resid)) +
@@ -500,56 +548,21 @@ f.ggsave(name = "Residual Plots_Density",
 cleaned_data <- p.df %>%
   filter(!is.na(vep_turnout_rate))
 
-ggplot(cleaned_data, aes(vep_turnout_rate)) +
-  geom_histogram()
+cleaned_data %>% 
+  as.data.frame() %>% 
+  ggplot(aes(x = vep_turnout_rate))+
+  geom_histogram()+
+  labs(title = "Histogram of Turnout Rates",
+       x = "\nVEP Turnout Rates (in %)",
+       y = "Frequency\n"
+       ) +
+  format2
 
 hist(p.df$vep_turnout_rate, breaks = 30, col = "#FF687F", border = "white",
      main = "Histogram of Turnout Rates",
      xlab = "VEP Turnout Rate")
-
-### Parallel Trend Assumption Check
-mean_vep <- p.df %>%
-  group_by(year, judiciary_fair_map_VAR) %>%
-  summarise(mean_vep = mean(log(vep_turnout_rate), na.rm = TRUE)) #%>% 
-  filter(!(year == 2000))
-
-ggplot(mean_vep, aes(x = year, y = mean_vep, color = judiciary_fair_map_VAR, group = judiciary_fair_map_VAR)) +
-  geom_line(size = 1) +
-  geom_point(size = 2)+
-  geom_vline(xintercept = 2010)
-  ylim(4,6)
-  
-
-p.df <- read_rds("04. Outputs/2024-10-13_regressionDF.rds")
-
-test <- p.df %>% 
-  filter(year_num == 2012 & judiciary_fair_map_VAR == 1) %>% 
-  select(state_abv) %>% 
-  mutate(first_treat = 2012) %>% 
-  right_join(p.df, by = join_by("state_abv")) %>%
-  mutate(first_treat = ifelse(is.na(first_treat), 0, first_treat)) %>% 
-  mutate(vep_turn_ln = log(vep_turnout_rate),
-         fips_num = as.numeric(fips))
-
-library(did)
-
-out <- att_gt(yname = "vep_turn_ln",
-              gname = "first_treat",
-              idname = "fips_num",
-              tname = "year_num",
-              data = test,
-              # xformla = ~ 
-              # ,
-              est_method = "reg")
-
-out %>% 
-  summary()
-
-ggdid(out)
-
-aggte(out, type = "dynamic") %>% 
-  ggdid()
-
 ```
+
+
 
 

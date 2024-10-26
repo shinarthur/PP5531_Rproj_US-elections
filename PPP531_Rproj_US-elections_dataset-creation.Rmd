@@ -1,11 +1,16 @@
 ---
-title: "U.S. Election Project"
+title: "U.S. Election Project | Dataset Creation"
 author: "Arthur, Moritz, San Hong"
-date: "2024-09-24"
-output: html_document
+date: "2024-11-01"
+output: 
+  html_document:
+    toc: TRUE
+    toc_float: TRUE
 ---
 
-```{r setup, include = TRUE}
+# Setup
+Loading packages and setting working directly. Note that working directory is set by the `here::here()` command and does not need to be edited, so long as file structure is maintained.
+```{r setup, message=FALSE, warning=FALSE}
 
 # install.packages("usa")
 
@@ -15,15 +20,20 @@ library(stringi)
 library(usa)
 library(expss)
 library(tidycensus)
+library(readxl)
 
 ### Change directory here. 
 ### As long as file structure is same as github structure, directory does not need to be changed.
 knitr::opts_knit$set(root.dir = here::here())
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
 
 ```
 
 # Create a Base Dataframe
-```{r base_df}
+## State Information
+Creating a base dataframe using `usa::states` and a custom function. `usa::states` includes basic state-level information such as state name, abbreviation, fips code, area, etc. The custom function creates a panel dataframe, for all 50 states for each election year between 2000 and 2020. 
+```{r base_df, include = TRUE}
 
 ### Function to create a base dataframe
 f.create.basedf <- function(df, start_year, end_year){
@@ -54,7 +64,9 @@ base_df <- f.create.basedf(usa::states, 2000, 2020) %>%
   
 ```
 
-```{r base_redist_df}
+## Redistricting Data
+Redistricting data is then imported, processed, and merged with the previously created base dataframe.
+```{r base_redist_df, include = TRUE}
 
 ### Import redistricting data
 ### https://redistricting.lls.edu/national-overview/?colorby=Plan%20Status&level=Congress&cycle=2020
@@ -113,7 +125,7 @@ df_redist.temp3 <- df_redist.temp2 %>%
          court_challenge_rejected_count = court_challenge_rejected
          )
 
-### Merge redistricting data with 
+### Merge redistricting data with previously created base_df
 base_redist_df <- left_join(base_df, df_redist.temp3,
           by = join_by("year" == "elect_year", "state_abv" == "state")) %>% 
   mutate(across(starts_with("court_"), ~ coalesce(as.numeric(.), 0))) %>% 
@@ -127,8 +139,19 @@ rm(list = grep("temp", ls(), value = TRUE))
 ```
 
 # Preparing Data for Merge
+Datasets for each of the independent variables are imported and prepared to be merged with the base dataframe. The preparation step includes processing the data to be at a state-level. Variables included in this step include:
 
-```{r df_housevote}
+* Votes for House of Representative candidates
+* Voter turnout rates
+* Crime rates
+* Unemployment rates
+* Number of polling stations
+* GDP
+* Wealth inequality
+* Party control over state legislature
+
+## Votes for House of Representative candidates
+```{r df_housevote, include = TRUE}
 
 ### Import house votes
 ### https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/IG0UN2 
@@ -185,8 +208,8 @@ rm(list = grep("temp", ls(), value = TRUE))
 
 ```
 
-
-```{r df_turnout}
+## Voter turnout rates
+```{r df_turnout, include = TRUE}
 
 ### Import voter turnout data
 ### https://election.lab.ufl.edu/dataset/1980-2022-general-election-turnout-rates/ 
@@ -205,31 +228,8 @@ df_turnout <- IMPORT.turnout %>%
 
 ```
 
-```{r df_crime}
-
-# ### Import state crime rate
-# ### https://corgis-edu.github.io/corgis/csv/state_crime/
-# IMPORT.crime <- read_csv("02. Inputs/state_crime.csv")
-# 
-# ### Preparing dataframe for merging
-# df_crime <- IMPORT.crime %>% 
-#   # Renaming column names to lowercase (for easier merge)
-#   rename_all(tolower) %>% 
-#   # Renaming column names to "crime" for easier indexing
-#   rename_with(~ gsub("data","statecrime",.), contains("data"))
-# 
-# # Extract statenames from df_crime and df_base to check if names are identical
-# df_crime_statename.temp <- df_crime %>% select(state) %>% distinct() %>% arrange() %>% mutate(x = 1)
-# df_base_statename.temp <- base_df %>% select(state_name) %>% distinct() %>% arrange() %>% mutate(y = 1)
-# full_join(df_crime_statename.temp, df_base_statename.temp, by = join_by("state" == "state_name")) %>% 
-#   filter(is.na(x) | is.na(y))
-# 
-# ### Cleanwork space
-# rm(list = grep("temp", ls(), value = TRUE))
-
-```
-
-```{r df_fbi_crime}
+## Crime rates
+```{r df_fbi_crime, include = TRUE}
 
 ### Source violent offenses reported by state:
 ### https://cde.ucr.cjis.gov/LATEST/webapp/#/pages/explorer/crime/crime-trend
@@ -237,21 +237,21 @@ df_turnout <- IMPORT.turnout %>%
 ### Row binding all annual county unemployment data from 1997 to 2003
 
 # Collate files' paths
-# fbi_crime_files.temp1 <- list.files(path = "02. Inputs/violent crimes FBI", full.names = TRUE, recursive = TRUE)
-# 
-# # Prepare empty data frame to catch
-# df_fbi_crime.temp1 <- data.frame(matrix(ncol = 253, nrow = 0))
-# 
-# # Loop each file into fbi_crime_files.temp1
-# for (file in fbi_crime_files.temp1) {
-#   # Read xslx file
-#   file_data <- read_csv(file)
-#   # Rbind
-#   df_fbi_crime.temp1 <- rbind(df_fbi_crime.temp1, file_data)
-# }
-# 
-# # Save df_fbi_crime.temp1 as an intermediary file
-# saveRDS(df_fbi_crime.temp1, file = paste0("03. Intermediaries/df_fbi_crime.rds"))
+fbi_crime_files.temp1 <- list.files(path = "02. Inputs/violent crimes FBI", full.names = TRUE, recursive = TRUE)
+
+# Prepare empty data frame to catch
+df_fbi_crime.temp1 <- data.frame(matrix(ncol = 253, nrow = 0))
+
+# Loop each file into fbi_crime_files.temp1
+for (file in fbi_crime_files.temp1) {
+  # Read xslx file
+  file_data <- read_csv(file)
+  # Rbind
+  df_fbi_crime.temp1 <- rbind(df_fbi_crime.temp1, file_data)
+}
+
+# Save df_fbi_crime.temp1 as an intermediary file
+saveRDS(df_fbi_crime.temp1, file = paste0("03. Intermediaries/df_fbi_crime.rds"))
 
 # Reimport df_poll
 df_fbi_crime.temp1 <- read_rds("03. Intermediaries/df_fbi_crime.rds")
@@ -270,41 +270,43 @@ df_fbi_crime <- df_fbi_crime.temp1 %>%
 
 ```
 
-```{r df_unemp, results='hide', message=FALSE}
+
+## Unemployment rates
+```{r df_unemp, results='hide', message=FALSE, include = TRUE}
 ### Source county unemployment rate from the following link:
 ### https://www.bls.gov/lau/tables.htm#cntyaa
 
 ### Row binding all annual county unemployment data from 1997 to 2003
 
 # Collate files' paths
-# unemp_county_files <- list.files(path = "02. Inputs/county_unemployment", full.names = TRUE, recursive = TRUE)
-# 
-# # Prepare empty data frame to catch
-# df_unemp <- data.frame(matrix(ncol = 8, nrow = 0))
-# 
-# # Loop each file into binding
-# for (file in unemp_county_files) {
-#   # Read xslx file
-#   file_data <- read_xlsx(file)
-#   # Remove headers and unnecessary columns to match to empty data frame
-#   file_slice <- file_data[-c(1:5),-c(1,6)] %>%
-#     # Remove NA (Note: there are data entry of "N.A." in character)
-#     na.omit()
-#   # Rename columns
-#   names(file_slice) <- c("state_code",
-#                          "county_code",
-#                          "countyName_StateAbbreviation",
-#                          "year",
-#                          "laborForce",
-#                          "employed",
-#                          "unemployed",
-#                          "unemploymentRate")
-#   # Rbind
-#   df_unemp <- rbind(df_unemp, file_slice)
-# }
-# 
-# # Save df_unemp as an intermediary file
-# saveRDS(df_unemp, file = paste0("03. Intermediaries/df_unemp.rds"))
+unemp_county_files <- list.files(path = "02. Inputs/county_unemployment", full.names = TRUE, recursive = TRUE)
+
+# Prepare empty data frame to catch
+df_unemp <- data.frame(matrix(ncol = 8, nrow = 0))
+
+# Loop each file into binding
+for (file in unemp_county_files) {
+  # Read xslx file
+  file_data <- read_xlsx(file)
+  # Remove headers and unnecessary columns to match to empty data frame
+  file_slice <- file_data[-c(1:5),-c(1,6)] %>%
+    # Remove NA (Note: there are data entry of "N.A." in character)
+    na.omit()
+  # Rename columns
+  names(file_slice) <- c("state_code",
+                         "county_code",
+                         "countyName_StateAbbreviation",
+                         "year",
+                         "laborForce",
+                         "employed",
+                         "unemployed",
+                         "unemploymentRate")
+  # Rbind
+  df_unemp <- rbind(df_unemp, file_slice)
+}
+
+# Save df_unemp as an intermediary file
+saveRDS(df_unemp, file = paste0("03. Intermediaries/df_unemp.rds"))
 
 # Reimport df_unemp
 df_unemp <- read_rds("03. Intermediaries/df_unemp.rds")
@@ -340,45 +342,46 @@ rm(list = grep("temp", ls(), value = TRUE))
 
 ```
 
-```{r df_poll}
+## Number of polling stations
+```{r df_poll, include = TRUE}
 ### Source Polling Station Data from the following linK:
 ### https://github.com/PublicI/us-polling-places/tree/update-2020
 
 ### Row bind all the county-level polling station data
 
-# # Collate all files path
-# poll_files_all <- list.files(path = "02. Inputs/us-polling-places/data", full.names = TRUE, recursive = TRUE)
-# 
-# # Filter for only polling station data
-# poll_files <- c()
-# for (file in poll_files_all){
-#   if(grepl("/output/", file)){
-#     poll_files <- append(poll_files, file)
-#   }
-# }
-# 
-# df_poll <- data.frame(matrix(ncol = 15, nrow = 0))
-# 
-# # Loop each file into binding
-# for (file in poll_files) {
-#   # Read csv file
-#   file_data <- read.csv(file)
-#   # Append state name from file path
-#   # state <- unlist(strsplit(file, "/"))[4]
-#   # file_data$state <- str_to_sentence(state)
-#   # Safety check for same number of columns before binding
-#   if (ncol(file_data) == 15){
-#     # Rbind
-#     df_poll <- rbind(df_poll, file_data)
-#   }
-#   else{
-#     print(file)
-#     print(ncol(file_data))
-#   }
-# }
-# 
-# # Save df_poll as an intermediary file
-# saveRDS(df_poll, file = paste0("03. Intermediaries/df_poll.rds"))
+# Collate all files path
+poll_files_all <- list.files(path = "02. Inputs/us-polling-places/data", full.names = TRUE, recursive = TRUE)
+
+# Filter for only polling station data
+poll_files <- c()
+for (file in poll_files_all){
+  if(grepl("/output/", file)){
+    poll_files <- append(poll_files, file)
+  }
+}
+
+df_poll <- data.frame(matrix(ncol = 15, nrow = 0))
+
+# Loop each file into binding
+for (file in poll_files) {
+  # Read csv file
+  file_data <- read.csv(file)
+  # Append state name from file path
+  # state <- unlist(strsplit(file, "/"))[4]
+  # file_data$state <- str_to_sentence(state)
+  # Safety check for same number of columns before binding
+  if (ncol(file_data) == 15){
+    # Rbind
+    df_poll <- rbind(df_poll, file_data)
+  }
+  else{
+    print(file)
+    print(ncol(file_data))
+  }
+}
+
+# Save df_poll as an intermediary file
+saveRDS(df_poll, file = paste0("03. Intermediaries/df_poll.rds"))
 
 # Reimport df_poll
 df_poll <- read_rds("03. Intermediaries/df_poll.rds")
@@ -399,7 +402,8 @@ df_poll_state <- df_poll %>%
 
 ```
 
-```{r df_gdp}
+## GDP
+```{r df_gdp, include = TRUE}
 
 ### Import state GDP
 ### https://www.bea.gov/data/gdp/gdp-state 
@@ -423,7 +427,8 @@ rm(list = grep("temp", ls(), value = TRUE))
 
 ```
 
-```{r df_wealth_inequality}
+## Wealth inequality
+```{r df_wealth_inequality, include = TRUE}
 
 ### Import state-level wealth inequality 
 ### https://www.openicpsr.org/openicpsr/project/192306/version/V4/view?path=/openicpsr/192306/fcr:versions/V4&type=project
@@ -438,7 +443,8 @@ df_wealth_inequality <- IMPORT.wealth_ineq %>%
 
 ```
 
-```{r df_stateparty}
+## Party control over state legislature
+```{r df_stateparty, include = TRUE}
 
 ### Import state partisan composition (state controlled by which party?)
 ### https://github.com/psthomas/state-partisan-composition
@@ -475,14 +481,9 @@ df_stateparty <- IMPORT.stateparty %>%
 
 
 # Merging Data
-Things to join:
-* df_housevote
-* df_turnout
-* df_poll_state
-* df_unemp_state
-* df_crime [replaced with fbi crime, due to lack of 2020 data]
+Independent variables are merged with the base dataframe.
 
-```{r merge}
+```{r merge, include = TRUE}
 
 ### Merge dataframes
 df_merge <- base_redist_df %>% 
@@ -497,7 +498,11 @@ df_merge <- base_redist_df %>%
 
 ```
 
-```{r additional edits}
+# Additional Edits
+This step includes the creation of binary treatment variables for creating the interaction terms in the data analysis step.
+
+## Treatment Variables
+```{r additional edits, include = TRUE}
 
 ### Add population density
 df_final.temp1 <- df_merge %>% 
@@ -533,7 +538,9 @@ df_final.temp2 <- df_final.temp1 %>%
 
 ```
 
-```{r apply labels}
+## Labels
+Labels are added to each variable for easier navigation.
+```{r apply labels, include = TRUE}
 
 ### Labelled data frame creation
 # List of variable names
@@ -603,18 +610,21 @@ legend <- sjlabelled::get_label(df_final) %>%
 
 ```
 
-```{r export}
+# Export File
+Dataset is exported as an RDS file. This file serves as the input for the other two scripts (reg-analysis & visualization.rmd)
+```{r export, include = TRUE}
 ### Save dataset
 # write.csv(df_final, file = paste0("04. Outputs/", today(), "_electiondataset.csv"))
 saveRDS(df_final, file = paste0("04. Outputs/", today(), "_electiondataset.rds"))
 
 ```
 
-# Additional Data Edits
-```{r additional edits}
+# Further Data Edits
+Step at the end in case further edits need to be made without disrupting the existing code.
+```{r further edits, include = TRUE}
 rm(list=ls())
 
-df <- read_rds("04. Outputs/2024-10-09_electiondataset.rds")
+df <- read_rds("04. Outputs/2024-10-26_electiondataset.rds")
 
 ```
 
