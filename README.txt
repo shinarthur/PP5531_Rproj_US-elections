@@ -10,7 +10,7 @@ PREFACE
 
 Preface #1: All the working directories for the code scripts are set using there here::here() function. This means that working directories do not need to be edited, so long as the file structure is maintained.
 
-Preface #2: If replication is not necessary please refer to the knitted versions in ¡°07. Knitted Files¡±
+Preface #2: If replication is not necessary please refer to the knitted versions in "07. Knitted Files"
 
 
 FILE STRUCTURE
@@ -26,6 +26,6 @@ FILE STRUCTURE
 
 REPLICATION STEPS
 **************************************************
-1. Create the dataset using¡°PPP531_Rproj_US-elections_dataset-creation.rmd¡±
-2. Conduct the regression analysis using ¡°PPP531_Rproj_US-elections_reg-analysis.rmd¡±
-3. Create visualizations using ¡°PPP531_Rproj_US-elections_visualization.rmd¡±
+1. Create the dataset using "[Step 1] Dataset-creation.rmd"
+2. Conduct the regression analysis using "[Step 2] Regression Analysis.rmd"
+3. Create visualizations using "[Step 3] Visualization.rmd"
